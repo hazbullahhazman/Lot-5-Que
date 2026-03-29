@@ -112,6 +112,15 @@ export default function Home() {
     setLoading(true)
     
     try {
+        // PRE-FLIGHT CHECK: Ensure the queue wasn't closed by Admin just now
+        const { data: settingsData } = await supabase.from('settings').select('is_accepting_bookings').limit(1).single()
+        if (settingsData && settingsData.is_accepting_bookings === false) {
+             setIsQueueOpen(false)
+             alert("We’re currently at full capacity due to high demand. Please try again shortly or try again tomorrow.")
+             setLoading(false)
+             return;
+        }
+
         const nextTicketNumber = queue.length > 0 ? queue[queue.length - 1].queue_number + 1 : currentServing + 1
 
         const { data, error } = await supabase.from('queue_entries').insert([{ 
@@ -280,7 +289,7 @@ export default function Home() {
                     <span className="material-symbols-outlined text-5xl text-red-600 font-black">block</span>
                  </div>
                  <h1 className="font-headline text-4xl font-extrabold tracking-tight text-red-600 mb-4">Queue Closed</h1>
-                 <p className="text-red-900/80 font-medium leading-relaxed mb-8">We have reached maximum capacity for today. Please try again tomorrow. Walk-ins may still be accepted depending on availability.</p>
+                 <p className="text-red-900/80 font-medium leading-relaxed mb-8 text-lg">We’re currently at full capacity due to high demand. Please try again shortly or try again tomorrow.</p>
                </div>
             )}
             

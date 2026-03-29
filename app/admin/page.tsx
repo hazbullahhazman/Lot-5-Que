@@ -182,17 +182,35 @@ export default function AdminDashboard() {
   }
 
   const handleCallNext = async (ticketId: string, ticketNumber: number) => {
+    // 1. Grab customer before removing
+    const customer = queue.find(q => q.id === ticketId)
+    
+    // 2. Remove from active queue immediately for snappy UI
+    setQueue(q => q.filter(item => item.id !== ticketId))
+    setCurrentServing(ticketNumber)
+    
+    // 3. Inject into Customer Database list instantly
+    if (customer) {
+        const d = new Date()
+        const completedRecord = {
+            id: ticketId,
+            date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+            time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+            name: customer.customer_name || 'Walk-in',
+            service: customer.service || 'Standard Cut',
+            phone: customer.phone_number || '-',
+            status: 'COMPLETED'
+        };
+        setHistoricalQueue(prev => [completedRecord, ...prev])
+        setCrmMetrics(prev => ({ ...prev, today: prev.today + 1, week: prev.week + 1, month: prev.month + 1 }))
+    }
+
+    // 4. Fire Async DB Updates
     try {
-        await supabase.from('queue_entries').update({ status: 'SERVING' }).eq('id', ticketId)
+        await supabase.from('queue_entries').update({ status: 'COMPLETED' }).eq('id', ticketId) // Changed from SERVING to COMPLETED to ensure it shows as green in ledger
         await supabase.from('settings').update({ current_serving_number: ticketNumber }).eq('id', 1)
-        
-        setQueue(q => q.filter(item => item.id !== ticketId))
-        setCurrentServing(ticketNumber)
     } catch(err) {
         console.error('Supabase not connected. Running offline demo skip.', err)
-        // Fallback so the button still works locally without a database!
-        setQueue(q => q.filter(item => item.id !== ticketId))
-        setCurrentServing(ticketNumber)
     }
   }
 
