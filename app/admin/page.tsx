@@ -21,19 +21,31 @@ export default function AdminDashboard() {
         const { data: queueData } = await supabase
           .from('queue_entries')
           .select('*')
-          .eq('status', 'WAITING')
+          .in('status', ['WAITING', 'CALLED'])
           .order('queue_number', { ascending: true })
         if (queueData) setQueue(queueData)
     } catch(err) {
         if(queue.length === 0) {
             setCurrentServing(12)
             setQueue([
-                { id: '1', queue_number: 14, customer_name: 'Julian De Luca', service: 'Skin Fade + Beard', phone_number: '(555) 123-4567' },
-                { id: '2', queue_number: 15, customer_name: 'Marcus Knight', service: 'Classic Taper', phone_number: '(555) 987-6543' },
-                { id: '3', queue_number: 16, customer_name: 'Aaron Rodriguez', service: 'Buzz Cut', phone_number: '(555) 246-8101' },
-                { id: '4', queue_number: 17, customer_name: 'Simon Lee', service: 'Long Hair Trim', phone_number: '(555) 369-1470' },
+                { id: '1', queue_number: 14, customer_name: 'Julian De Luca', service: 'Skin Fade + Beard', phone_number: '(555) 123-4567', status: 'WAITING' },
+                { id: '2', queue_number: 15, customer_name: 'Marcus Knight', service: 'Classic Taper', phone_number: '(555) 987-6543', status: 'WAITING' },
+                { id: '3', queue_number: 16, customer_name: 'Aaron Rodriguez', service: 'Buzz Cut', phone_number: '(555) 246-8101', status: 'WAITING' },
+                { id: '4', queue_number: 17, customer_name: 'Simon Lee', service: 'Long Hair Trim', phone_number: '(555) 369-1470', status: 'WAITING' },
             ])
         }
+    }
+  }
+
+  const handleCallCustomer = async (ticketId: string, customerName: string) => {
+    if (window.confirm(`Call ${customerName || 'Customer'} to the floor?`)) {
+      try {
+          await supabase.from('queue_entries').update({ status: 'CALLED' }).eq('id', ticketId)
+          setQueue(q => q.map(item => item.id === ticketId ? { ...item, status: 'CALLED' } : item))
+      } catch(err) {
+          console.error('Supabase not connected. Running offline demo call.', err)
+          setQueue(q => q.map(item => item.id === ticketId ? { ...item, status: 'CALLED' } : item))
+      }
     }
   }
 
@@ -45,7 +57,10 @@ export default function AdminDashboard() {
         setQueue(q => q.filter(item => item.id !== ticketId))
         setCurrentServing(ticketNumber)
     } catch(err) {
-        console.error(err)
+        console.error('Supabase not connected. Running offline demo skip.', err)
+        // Fallback so the button still works locally without a database!
+        setQueue(q => q.filter(item => item.id !== ticketId))
+        setCurrentServing(ticketNumber)
     }
   }
 
@@ -192,21 +207,27 @@ export default function AdminDashboard() {
                         </div>
                       </td>
                       <td className="px-8 py-6">
-                         <span className={`font-bold text-xs uppercase tracking-tighter ${i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant'}`}>
-                            {i === 0 ? 'Next Up' : 'Waiting'}
+                         <span className={`font-bold text-xs uppercase tracking-tighter ${q.status === 'CALLED' ? 'text-[#545b00] bg-[#e5f638] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
+                            {q.status === 'CALLED' ? 'Called out' : (i === 0 ? 'Next Up' : 'Waiting')}
                          </span>
                       </td>
                       <td className="px-8 py-6 text-right">
                          <div className="flex justify-end gap-2">
+                           {q.status !== 'CALLED' && (
+                               <button 
+                                 onClick={() => handleCallCustomer(q.id, q.customer_name)}
+                                 className="text-on-surface-variant hover:text-[#545b00] transition-colors p-2 rounded-full hover:bg-[#e5f638]/40"
+                                 title="Call Customer Formally"
+                               >
+                                 <span className="material-symbols-outlined font-black">campaign</span>
+                               </button>
+                           )}
                            <button 
                              onClick={() => handleCallNext(q.id, q.queue_number)}
                              className="text-on-surface-variant hover:text-[#004be2] transition-colors p-2 rounded-full hover:bg-[#004be2]/10"
-                             title="Take Next"
+                             title="Complete Ticket & Mark Serving"
                            >
                              <span className="material-symbols-outlined font-black">check</span>
-                           </button>
-                           <button className="text-on-surface-variant hover:text-secondary transition-colors p-2 rounded-full hover:bg-secondary/10">
-                             <span className="material-symbols-outlined">more_vert</span>
                            </button>
                          </div>
                       </td>

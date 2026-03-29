@@ -15,6 +15,7 @@ export default function Home() {
   // Local state for Demo. In production, could be persisted in localStorage to survive reloads
   const [joinedTicket, setJoinedTicket] = useState<number | null>(null)
   const [myQueueId, setMyQueueId] = useState<string | null>(null)
+  const [myTicketStatus, setMyTicketStatus] = useState<string>('WAITING')
 
   useEffect(() => {
     // 🔥 NEW: Instant LocalStorage Restore
@@ -28,11 +29,14 @@ export default function Home() {
            if (savedTicketId !== 'mock-id') {
                supabase.from('queue_entries').select('status').eq('id', savedTicketId).single()
                  .then(({data}) => {
-                     if (!data || data.status !== 'WAITING') {
+                     // Keep them if they are WAITING or CALLED
+                     if (!data || (data.status !== 'WAITING' && data.status !== 'CALLED')) {
                          localStorage.removeItem('lot5_queue_id')
                          localStorage.removeItem('lot5_queue_number')
                          setJoinedTicket(null)
                          setMyQueueId(null)
+                     } else {
+                         setMyTicketStatus(data.status)
                      }
                  })
            }
@@ -64,11 +68,28 @@ export default function Home() {
         const { data: queueData } = await supabase
           .from('queue_entries')
           .select('*')
-          .eq('status', 'WAITING')
+          .in('status', ['WAITING', 'CALLED'])
           .order('queue_number', { ascending: true })
-        if (queueData) setQueue(queueData)
-
-        // Local storage restoration moved to main useEffect mount for instant boot
+        
+        if (queueData) {
+            setQueue(queueData)
+            // Sync current ticket status if active via Realtime update
+            if (typeof window !== 'undefined') {
+                const id = localStorage.getItem('lot5_queue_id')
+                if (id && id !== 'mock-id') {
+                    const myData = queueData.find(q => q.id === id)
+                    if (myData) {
+                        setMyTicketStatus(myData.status)
+                    } else {
+                        // Ticket was cleared out
+                        localStorage.removeItem('lot5_queue_id')
+                        localStorage.removeItem('lot5_queue_number')
+                        setJoinedTicket(null)
+                        setMyQueueId(null)
+                    }
+                }
+            }
+        }
     } catch(err) {
         if(queue.length === 0 && currentServing === 0) {
             setCurrentServing(12)
@@ -254,6 +275,20 @@ export default function Home() {
            transition={{ duration: 0.8, delay: 0.2 }}
            className="pt-32 pb-32 px-4 max-w-lg mx-auto md:max-w-4xl relative z-10 min-h-screen"
         >
+          {myTicketStatus === 'CALLED' ? (
+             <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-in fade-in zoom-in duration-500">
+               <div className="w-32 h-32 bg-[#004be2] rounded-full flex items-center justify-center animate-bounce shadow-[0_0_60px_rgba(0,0,0,0.1)] mb-8 border-4 border-[#c5d0ff]">
+                  <span className="material-symbols-outlined text-6xl text-white">campaign</span>
+               </div>
+               <h1 className="font-headline text-5xl md:text-6xl font-black text-[#004be2] tracking-tighter leading-tight mb-6">
+                  Bro Its your turn,<br/>Jom jadi Handsome !
+               </h1>
+               <p className="text-[#545b00] bg-[#e5f638] px-6 py-3 rounded-full font-bold uppercase tracking-widest text-sm shadow-md mt-4 border border-[#545b00]/10">
+                  Please proceed to the barbershop floor immediately.
+               </p>
+             </div>
+          ) : (
+          <>
           <section className="mb-10 text-center">
             <h1 className="font-headline text-5xl font-extrabold tracking-tight text-primary-dim mb-2">Live Status</h1>
             <p className="text-on-surface-variant font-medium">Sit back and relax. We'll notify you when it's your turn.</p>
@@ -331,6 +366,8 @@ export default function Home() {
                 </p>
             </div>
           </div>
+          </>
+          )}
           
           {/* Subtle noise pattern overlay */}
           <div className="fixed inset-0 pointer-events-none opacity-[0.02] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] mix-blend-overlay -z-10"></div>
