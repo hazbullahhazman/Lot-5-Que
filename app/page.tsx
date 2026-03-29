@@ -1,0 +1,347 @@
+'use client'
+
+import { useEffect, useState } from 'react'
+import { supabase } from '@/utils/supabase'
+import { motion, AnimatePresence } from 'framer-motion'
+import { ArrowRight, User, Phone, LogOut } from 'lucide-react'
+
+export default function Home() {
+  const [currentServing, setCurrentServing] = useState(0)
+  const [queue, setQueue] = useState<any[]>([])
+  const [name, setName] = useState('')
+  const [phone, setPhone] = useState('')
+  const [loading, setLoading] = useState(false)
+  
+  // Local state for Demo. In production, could be persisted in localStorage to survive reloads
+  const [joinedTicket, setJoinedTicket] = useState<number | null>(null)
+  const [myQueueId, setMyQueueId] = useState<string | null>(null)
+
+  useEffect(() => {
+    fetchInitialData()
+    // Setup Supabase Realtime Listeners
+    const channel = supabase
+      .channel('public-events')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
+        fetchInitialData()
+      })
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, (payload: any) => {
+        if(payload.new.current_serving_number !== undefined) {
+          setCurrentServing(payload.new.current_serving_number)
+        }
+      })
+      .subscribe()
+
+    return () => { supabase.removeChannel(channel) }
+  }, [])
+
+  const fetchInitialData = async () => {
+    try {
+        const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single()
+        if (settingsData) setCurrentServing(settingsData.current_serving_number || 0)
+
+        const { data: queueData } = await supabase
+          .from('queue_entries')
+          .select('*')
+          .eq('status', 'WAITING')
+          .order('queue_number', { ascending: true })
+        if (queueData) setQueue(queueData)
+    } catch(err) {
+        if(queue.length === 0 && currentServing === 0) {
+            setCurrentServing(12)
+            setQueue([
+                { id: '1', queue_number: 14, customer_name: 'James D.', phone_number: '123' },
+                { id: '2', queue_number: 15, customer_name: 'Mark R.', phone_number: '321' }
+            ])
+        }
+    }
+  }
+
+  const joinQueue = async (e: React.FormEvent) => {
+    e.preventDefault()
+    setLoading(true)
+    
+    try {
+        const nextTicketNumber = queue.length > 0 ? queue[queue.length - 1].queue_number + 1 : currentServing + 1
+
+        const { data, error } = await supabase.from('queue_entries').insert([{ 
+            customer_name: name, 
+            phone_number: phone,
+            queue_number: nextTicketNumber
+        }]).select()
+        
+        if(error) throw error
+
+        setJoinedTicket(nextTicketNumber)
+        if(data) setMyQueueId(data[0].id)
+        
+    } catch (err) {
+        const mockTicketNumber = currentServing + queue.length + 1
+        setJoinedTicket(mockTicketNumber)
+        setMyQueueId('mock-id')
+        
+        // Add fake entry to local state to reflect UI instantly
+        setQueue(prev => [...prev, { id: 'mock-id', queue_number: mockTicketNumber, customer_name: name || 'Demo User' }])
+    } finally {
+        setLoading(false)
+    }
+  }
+
+  const exitQueue = async () => {
+      try {
+          if (myQueueId && myQueueId !== 'mock-id') {
+              await supabase.from('queue_entries').update({ status: 'CANCELLED' }).eq('id', myQueueId)
+          } else {
+              setQueue(prev => prev.filter(q => q.id !== 'mock-id'))
+          }
+      } catch (err) {
+          console.error(err)
+      } finally {
+          setJoinedTicket(null)
+          setMyQueueId(null)
+          setName('')
+          setPhone('')
+      }
+  }
+
+  // Calculate position logic for the dashboard view
+  const myQueueIndex = queue.findIndex(q => q.queue_number === joinedTicket);
+  const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
+  // If myQueueIndex is 0, they are next. If it's -1, they probably aren't in queue array (error or served). 
+  let positionDisplay = peopleAhead + 1; 
+  let positionSuffix = "TH";
+  if (positionDisplay === 1) positionSuffix = "ST";
+  else if (positionDisplay === 2) positionSuffix = "ND";
+  else if (positionDisplay === 3) positionSuffix = "RD";
+
+  return (
+    <div className={`min-h-screen text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container ${!joinedTicket ? 'flex flex-col bg-surface spotlight-gradient' : 'bg-[#f8fcfd] spotlight-bg'}`}>
+      
+      {joinedTicket && (
+        <header className="bg-white/95 backdrop-blur-md transition-colors flex justify-between items-center w-full px-6 py-4 fixed top-0 z-50 shadow-sm border-b border-outline-variant/10">
+          <div className="flex items-center gap-4">
+            <span className="text-2xl font-black tracking-tighter text-[#596000] font-headline">Lot 5 Barbershop</span>
+          </div>
+          <div className="flex items-center gap-4">
+            <div className="w-8 h-8 rounded-full border-2 border-primary-container overflow-hidden bg-surface-container-high">
+              <span className="material-symbols-outlined text-outline-variant leading-none mt-1 ml-1" style={{ fontSize: '20px' }}>person</span>
+            </div>
+          </div>
+        </header>
+      )}
+
+      {/* -- VIEW 1: JOIN QUEUE -- */}
+      <AnimatePresence mode="wait">
+      {!joinedTicket ? (
+        <motion.main 
+           key="join"
+           initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
+           transition={{ duration: 0.6 }}
+           className="flex-grow flex items-center justify-center p-6 relative overflow-hidden h-screen"
+        >
+          <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary-container/20 rounded-full blur-3xl mix-blend-multiply"></div>
+          <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-secondary/10 rounded-full blur-3xl mix-blend-multiply"></div>
+
+          <div className="w-full max-w-lg relative z-10">
+            <div className="text-center mb-10">
+              <span className="text-3xl font-black tracking-tighter text-primary block mb-2 font-headline">Lot 5 Barbershop</span>
+              <div className="h-1 w-12 bg-secondary mx-auto rounded-full"></div>
+            </div>
+
+            <div className="bg-surface-container-lowest rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.06)] overflow-hidden border border-outline-variant/10">
+              <div className="p-8 md:p-12">
+                <header className="mb-8 items-start">
+                  <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background leading-none mb-4">Join the Queue</h1>
+                  <p className="text-on-surface-variant text-sm font-medium leading-relaxed max-w-xs">Enter your details to secure your spot in today's rotation. We'll text you when your chair is ready.</p>
+                </header>
+
+                <form onSubmit={joinQueue} className="space-y-6">
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Name</label>
+                    <div className="relative">
+                      <User className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5" />
+                      <input 
+                        required type="text" value={name} onChange={e => setName(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-secondary/20 focus:bg-surface-container-high transition-all duration-200 font-medium placeholder:text-outline-variant/60" 
+                        placeholder="Enter your full name" 
+                      />
+                    </div>
+                  </div>
+
+                  <div className="space-y-2">
+                    <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Phone Number</label>
+                    <div className="relative">
+                      <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5" />
+                      <input 
+                        required type="tel" value={phone} onChange={e => setPhone(e.target.value)}
+                        className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-secondary/20 focus:bg-surface-container-high transition-all duration-200 font-medium placeholder:text-outline-variant/60" 
+                        placeholder="(555) 000-0000" 
+                      />
+                    </div>
+                  </div>
+
+                  <button 
+                    disabled={loading} type="submit"
+                    className="w-full bg-primary-container text-on-primary-container font-headline font-extrabold text-lg py-5 rounded-full shadow-lg shadow-primary-container/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-4 flex items-center justify-center gap-3 group disabled:opacity-50"
+                  >
+                    {loading ? 'Processing...' : 'Join Now'}
+                    {!loading && <ArrowRight className="w-5 h-5 group-hover:translate-x-1 transition-transform" />}
+                  </button>
+                </form>
+
+                <div className="mt-10 pt-8 border-t border-outline-variant/10 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-outline">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
+                    <span>Current Wait: {queue.length > 0 ? queue.length * 20 : 0} Mins</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>event_seat</span>
+                    <span>System Live</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+            
+            <div className="mt-8 flex justify-center gap-8">
+                <a href="#" className="text-xs font-bold text-on-surface-variant hover:text-secondary transition-colors uppercase tracking-widest flex items-center gap-1">Policy</a>
+            </div>
+          </div>
+        </motion.main>
+      ) : (
+      
+      /* -- VIEW 2: LIVE DASHBOARD -- */
+        <motion.main 
+           key="dashboard"
+           initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} 
+           transition={{ duration: 0.8, delay: 0.2 }}
+           className="pt-32 pb-32 px-4 max-w-lg mx-auto md:max-w-4xl relative z-10 min-h-screen"
+        >
+          <section className="mb-10 text-center">
+            <h1 className="font-headline text-5xl font-extrabold tracking-tight text-primary-dim mb-2">Live Status</h1>
+            <p className="text-on-surface-variant font-medium">Sit back and relax. We'll notify you when it's your turn.</p>
+          </section>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-surface-container-lowest rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden group border border-outline-variant/5">
+              <span className="text-sm font-label font-bold uppercase tracking-widest text-on-surface-variant mb-4">Your Position</span>
+              <div className="relative">
+                <span className="font-headline text-[7rem] font-black text-primary tracking-tighter leading-none">{positionDisplay}</span>
+                <span className="font-headline text-2xl font-bold text-primary-dim absolute top-2 -right-10">{positionSuffix}</span>
+              </div>
+              <p className="mt-4 font-body font-semibold text-secondary">in the queue</p>
+            </div>
+
+            <div className="bg-primary-container rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm border border-primary/5">
+              <span className="text-sm font-label font-bold uppercase tracking-widest text-on-primary-container mb-4">Estimated Wait</span>
+              <div className="flex items-baseline gap-2">
+                <span className="font-headline text-7xl font-black text-on-primary-container tracking-tighter leading-none">{peopleAhead * 20}</span>
+                <span className="font-headline text-2xl font-bold text-on-primary-container">MIN</span>
+              </div>
+              <div className="mt-4 flex items-center gap-2 bg-on-primary-container/10 px-4 py-1.5 rounded-full">
+                <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                <span className="text-xs font-bold text-on-primary-container uppercase tracking-tight">Active</span>
+              </div>
+            </div>
+
+            <div className="md:col-span-2 bg-surface-container-lowest rounded-[2rem] p-8 shadow-sm border border-outline-variant/5">
+              <div className="flex justify-between items-center mb-8">
+                <h3 className="font-headline text-xl font-bold tracking-tight">People Ahead of You</h3>
+                <span className="bg-secondary-container text-secondary text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{peopleAhead} Remaining</span>
+              </div>
+              
+              <div className="space-y-4">
+                {queue.slice(0, Math.max(0, myQueueIndex)).map((q, i) => (
+                  <div key={q.id} className={`flex items-center justify-between p-4 rounded-xl transition-all ${i === 0 ? 'bg-surface border border-outline-variant/10 shadow-sm' : 'bg-surface/50'}`}>
+                    <div className="flex items-center gap-4">
+                      <div className="w-12 h-12 bg-surface-container-high rounded-full flex items-center justify-center font-headline font-bold text-on-surface-variant">
+                          {q.customer_name ? q.customer_name.substring(0, 2).toUpperCase() : 'CU'}
+                      </div>
+                      <div>
+                        <p className="font-headline font-bold text-on-surface">{q.customer_name || 'Customer'}</p>
+                        <p className="text-xs font-medium text-on-surface-variant">Ticket #{q.queue_number} • {i === 0 ? 'Next Up' : 'Waiting'}</p>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-secondary animate-pulse' : 'bg-outline-variant'}`}></span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${i === 0 ? 'text-secondary' : 'text-on-surface-variant'}`}>
+                          {i === 0 ? 'In Chair' : 'Waiting'}
+                      </span>
+                    </div>
+                  </div>
+                ))}
+
+                {peopleAhead === 0 && (
+                   <div className="py-8 text-center text-secondary font-bold font-headline rounded-xl bg-secondary-container/30 border border-secondary/10">
+                       You are next in line! Head to the shop floor.
+                   </div>
+                )}
+              </div>
+            </div>
+
+            <div className="md:col-span-2 flex flex-col gap-4 mt-8">
+                <button 
+                  onClick={exitQueue}
+                  className="w-full bg-error-container text-on-error-container font-headline font-extrabold py-5 rounded-full flex items-center justify-center gap-3 transition-all active:scale-95 hover:bg-error hover:text-white group"
+                >
+                  <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
+                  Exit Queue
+                </button>
+                <p className="text-center text-[10px] text-on-surface-variant font-bold uppercase tracking-[0.2em] px-8">
+                  By exiting, you will lose your spot in line and must re-register to join again.
+                </p>
+            </div>
+          </div>
+          
+          {/* Subtle noise pattern overlay */}
+          <div className="fixed inset-0 pointer-events-none opacity-[0.02] bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] mix-blend-overlay -z-10"></div>
+        </motion.main>
+      )}
+      </AnimatePresence>
+
+      {/* Promotional / Information Section (Quality & Efficiency) */}
+      <section className="w-full max-w-6xl mx-auto px-6 pb-32 mt-12 relative z-10">
+        
+        {/* "Why Choose Us" Bento Block */}
+        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
+            {/* Title Block - Dark */}
+            <div className="md:col-span-1 bg-[#1a1a1a] text-white p-8 rounded-[2rem] flex flex-col justify-center shadow-lg hover:shadow-xl transition-shadow">
+                <h2 className="font-headline text-4xl lg:text-5xl font-black leading-none tracking-tight mb-6 mt-4">Why<br/>choose<br/>Lot 5?</h2>
+                <div className="w-12 h-1.5 bg-[#e5f638] rounded-full mt-auto"></div>
+            </div>
+            
+            {/* Value Props - Light */}
+            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
+                <span className="material-symbols-outlined text-[#e5f638] bg-[#596000] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>content_cut</span>
+                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Master Quality</h3>
+                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Every cut is an editorial masterpiece, crafted with precision by master barbers in an upscale environment.</p>
+            </div>
+            
+            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
+                <span className="material-symbols-outlined text-[#004be2] bg-[#c5d0ff] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
+                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Maximum Efficiency</h3>
+                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Skip the waiting room. Track your exact turn live, jump in the queue from anywhere, and arrive right as your chair opens.</p>
+            </div>
+
+            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
+                <span className="material-symbols-outlined text-white bg-[#1a1a1a] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>spa</span>
+                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Premium Vibe</h3>
+                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Enjoy complimentary premium beverages, hot towel finishing, and the very best grooming products on the market.</p>
+            </div>
+        </div>
+
+        {/* Gallery Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-md group border-4 border-white">
+                <img src="/barber-1.jpg" alt="Master barber fading hair" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
+            </div>
+            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-lg group md:-translate-y-8 border-4 border-white">
+                <img src="/barber-2.jpg" alt="Precision haircutting work" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
+            </div>
+            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-md group border-4 border-white">
+                <img src="/barber-3.jpg" alt="Stylist finishing the trim" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
+            </div>
+        </div>
+      </section>
+      
+    </div>
+  )
+}
