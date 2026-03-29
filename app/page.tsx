@@ -17,6 +17,28 @@ export default function Home() {
   const [myQueueId, setMyQueueId] = useState<string | null>(null)
 
   useEffect(() => {
+    // 🔥 NEW: Instant LocalStorage Restore
+    if (typeof window !== 'undefined') {
+       const savedTicketId = localStorage.getItem('lot5_queue_id')
+       const savedQueueNumber = localStorage.getItem('lot5_queue_number')
+       if (savedTicketId && savedQueueNumber) {
+           setMyQueueId(savedTicketId)
+           setJoinedTicket(parseInt(savedQueueNumber))
+           
+           if (savedTicketId !== 'mock-id') {
+               supabase.from('queue_entries').select('status').eq('id', savedTicketId).single()
+                 .then(({data}) => {
+                     if (!data || data.status !== 'WAITING') {
+                         localStorage.removeItem('lot5_queue_id')
+                         localStorage.removeItem('lot5_queue_number')
+                         setJoinedTicket(null)
+                         setMyQueueId(null)
+                     }
+                 })
+           }
+       }
+    }
+
     fetchInitialData()
     // Setup Supabase Realtime Listeners
     const channel = supabase
@@ -45,6 +67,8 @@ export default function Home() {
           .eq('status', 'WAITING')
           .order('queue_number', { ascending: true })
         if (queueData) setQueue(queueData)
+
+        // Local storage restoration moved to main useEffect mount for instant boot
     } catch(err) {
         if(queue.length === 0 && currentServing === 0) {
             setCurrentServing(12)
@@ -66,18 +90,29 @@ export default function Home() {
         const { data, error } = await supabase.from('queue_entries').insert([{ 
             customer_name: name, 
             phone_number: phone,
-            queue_number: nextTicketNumber
+            queue_number: nextTicketNumber,
+            status: 'WAITING' // CRITICAL FIX: Ensure Admin panel properly detects the new entry
         }]).select()
         
         if(error) throw error
 
         setJoinedTicket(nextTicketNumber)
-        if(data) setMyQueueId(data[0].id)
+        if(data && data[0]) {
+            setMyQueueId(data[0].id)
+            if (typeof window !== 'undefined') {
+                localStorage.setItem('lot5_queue_id', data[0].id)
+                localStorage.setItem('lot5_queue_number', nextTicketNumber.toString())
+            }
+        }
         
     } catch (err) {
         const mockTicketNumber = currentServing + queue.length + 1
         setJoinedTicket(mockTicketNumber)
         setMyQueueId('mock-id')
+        if (typeof window !== 'undefined') {
+            localStorage.setItem('lot5_queue_id', 'mock-id')
+            localStorage.setItem('lot5_queue_number', mockTicketNumber.toString())
+        }
         
         // Add fake entry to local state to reflect UI instantly
         setQueue(prev => [...prev, { id: 'mock-id', queue_number: mockTicketNumber, customer_name: name || 'Demo User' }])
@@ -96,6 +131,10 @@ export default function Home() {
       } catch (err) {
           console.error(err)
       } finally {
+          if (typeof window !== 'undefined') {
+             localStorage.removeItem('lot5_queue_id')
+             localStorage.removeItem('lot5_queue_number')
+          }
           setJoinedTicket(null)
           setMyQueueId(null)
           setName('')
@@ -221,31 +260,33 @@ export default function Home() {
           </section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-surface-container-lowest rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden group border border-outline-variant/5">
-              <span className="text-sm font-label font-bold uppercase tracking-widest text-on-surface-variant mb-4">Your Position</span>
+            <div className="bg-[#c5d0ff] rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden transition-all hover:shadow-md">
+              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-4">Your Position</span>
               <div className="relative">
-                <span className="font-headline text-[7rem] font-black text-primary tracking-tighter leading-none">{positionDisplay}</span>
-                <span className="font-headline text-2xl font-bold text-primary-dim absolute top-2 -right-10">{positionSuffix}</span>
+                <span className="font-headline text-[7rem] font-black text-[#004be2] tracking-tighter leading-none">{positionDisplay}</span>
+                <span className="font-headline text-2xl font-bold text-[#004be2]/60 absolute top-2 -right-12">{positionSuffix}</span>
               </div>
-              <p className="mt-4 font-body font-semibold text-secondary">in the queue</p>
+              <p className="mt-4 font-body font-semibold text-[#004be2]/80">in the queue</p>
+              <div className="absolute right-0 top-0 w-48 h-48 bg-white/20 blur-3xl rounded-full mix-blend-overlay pointer-events-none"></div>
             </div>
 
-            <div className="bg-primary-container rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm border border-primary/5">
-              <span className="text-sm font-label font-bold uppercase tracking-widest text-on-primary-container mb-4">Estimated Wait</span>
-              <div className="flex items-baseline gap-2">
-                <span className="font-headline text-7xl font-black text-on-primary-container tracking-tighter leading-none">{peopleAhead * 20}</span>
-                <span className="font-headline text-2xl font-bold text-on-primary-container">MIN</span>
+            <div className="bg-[#e5f638] rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm border border-[#545b00]/10 transition-all hover:shadow-md relative overflow-hidden">
+              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-4">Estimated Wait</span>
+              <div className="flex items-baseline gap-2 relative z-10">
+                <span className="font-headline text-7xl font-black text-[#545b00] tracking-tighter leading-none">{peopleAhead * 20}</span>
+                <span className="font-headline text-2xl font-bold text-[#545b00]">MIN</span>
               </div>
-              <div className="mt-4 flex items-center gap-2 bg-on-primary-container/10 px-4 py-1.5 rounded-full">
-                <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-                <span className="text-xs font-bold text-on-primary-container uppercase tracking-tight">Active</span>
+              <div className="mt-4 flex items-center gap-2 bg-black/5 px-4 py-1.5 rounded-full relative z-10">
+                <span className="material-symbols-outlined text-sm text-[#545b00]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                <span className="text-xs font-bold text-[#545b00] uppercase tracking-tight">Active</span>
               </div>
+              <div className="absolute left-0 bottom-0 w-48 h-48 bg-white/30 blur-3xl rounded-full mix-blend-overlay pointer-events-none"></div>
             </div>
 
-            <div className="md:col-span-2 bg-surface-container-lowest rounded-[2rem] p-8 shadow-sm border border-outline-variant/5">
-              <div className="flex justify-between items-center mb-8">
-                <h3 className="font-headline text-xl font-bold tracking-tight">People Ahead of You</h3>
-                <span className="bg-secondary-container text-secondary text-xs font-bold px-3 py-1 rounded-full uppercase tracking-wider">{peopleAhead} Remaining</span>
+            <div className="md:col-span-2 bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
+              <div className="flex justify-between items-center mb-8 border-b border-outline-variant/5 pb-4">
+                <h3 className="font-headline text-xl font-bold tracking-tight text-[#2f2e2e]">People Ahead of You</h3>
+                <span className="bg-[#1a1a1a] text-[#e5f638] text-xs font-bold px-4 py-1.5 rounded-full uppercase tracking-wider">{peopleAhead} Remaining</span>
               </div>
               
               <div className="space-y-4">
@@ -261,8 +302,8 @@ export default function Home() {
                       </div>
                     </div>
                     <div className="flex items-center gap-2">
-                      <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-secondary animate-pulse' : 'bg-outline-variant'}`}></span>
-                      <span className={`text-[10px] font-bold uppercase tracking-widest ${i === 0 ? 'text-secondary' : 'text-on-surface-variant'}`}>
+                      <span className={`w-2 h-2 rounded-full ${i === 0 ? 'bg-[#004be2] animate-pulse' : 'bg-outline-variant'}`}></span>
+                      <span className={`text-[10px] font-bold uppercase tracking-widest ${i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant'}`}>
                           {i === 0 ? 'In Chair' : 'Waiting'}
                       </span>
                     </div>
@@ -270,7 +311,7 @@ export default function Home() {
                 ))}
 
                 {peopleAhead === 0 && (
-                   <div className="py-8 text-center text-secondary font-bold font-headline rounded-xl bg-secondary-container/30 border border-secondary/10">
+                   <div className="py-8 text-center text-[#545b00] font-bold font-headline rounded-xl bg-[#e5f638] border border-[#545b00]/10 shadow-sm text-lg animate-pulse">
                        You are next in line! Head to the shop floor.
                    </div>
                 )}
@@ -280,7 +321,7 @@ export default function Home() {
             <div className="md:col-span-2 flex flex-col gap-4 mt-8">
                 <button 
                   onClick={exitQueue}
-                  className="w-full bg-error-container text-on-error-container font-headline font-extrabold py-5 rounded-full flex items-center justify-center gap-3 transition-all active:scale-95 hover:bg-error hover:text-white group"
+                  className="w-full bg-white text-red-500 font-headline font-extrabold py-5 rounded-full flex items-center justify-center gap-3 transition-all active:scale-95 hover:bg-red-50 hover:text-red-600 border border-red-100 shadow-sm group"
                 >
                   <LogOut className="w-5 h-5 transition-transform group-hover:-translate-x-1" />
                   Exit Queue
