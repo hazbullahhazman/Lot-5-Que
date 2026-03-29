@@ -12,10 +12,10 @@ export default function Home() {
   const [phone, setPhone] = useState('')
   const [loading, setLoading] = useState(false)
   
-  // Local state for Demo. In production, could be persisted in localStorage to survive reloads
   const [joinedTicket, setJoinedTicket] = useState<number | null>(null)
   const [myQueueId, setMyQueueId] = useState<string | null>(null)
   const [myTicketStatus, setMyTicketStatus] = useState<string>('WAITING')
+  const [isQueueOpen, setIsQueueOpen] = useState(true)
 
   useEffect(() => {
     // 🔥 NEW: Instant LocalStorage Restore
@@ -54,6 +54,9 @@ export default function Home() {
         if(payload.new.current_serving_number !== undefined) {
           setCurrentServing(payload.new.current_serving_number)
         }
+        if(payload.new.is_accepting_bookings !== undefined) {
+          setIsQueueOpen(payload.new.is_accepting_bookings)
+        }
       })
       .subscribe()
 
@@ -63,7 +66,10 @@ export default function Home() {
   const fetchInitialData = async () => {
     try {
         const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single()
-        if (settingsData) setCurrentServing(settingsData.current_serving_number || 0)
+        if (settingsData) {
+            setCurrentServing(settingsData.current_serving_number || 0)
+            if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+        }
 
         const { data: queueData } = await supabase
           .from('queue_entries')
@@ -189,19 +195,25 @@ export default function Home() {
         </header>
       )}
 
-      {/* -- VIEW 1: JOIN QUEUE -- */}
-      <AnimatePresence mode="wait">
+      {/* -- MAIN CONTENT WRAPPER -- */}
+      <div className="w-full relative z-10 flex flex-col">
+        
+        {/* TOP SCREEN: Dynamic Dashboard/Form */}
+        <div className="w-full relative min-h-[90vh] flex flex-col justify-center max-w-[1000px] mx-auto pt-16 lg:pt-24 pb-16 px-4 md:px-8">
+          <AnimatePresence mode="wait">
       {!joinedTicket ? (
         <motion.main 
            key="join"
            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
            transition={{ duration: 0.6 }}
-           className="flex-grow flex items-center justify-center p-6 relative overflow-hidden h-screen"
+           className="flex-grow flex items-center justify-center py-12 relative overflow-hidden min-h-[70vh]"
         >
-          <div className="absolute -top-24 -right-24 w-96 h-96 bg-primary-container/20 rounded-full blur-3xl mix-blend-multiply"></div>
-          <div className="absolute -bottom-24 -left-24 w-80 h-80 bg-secondary/10 rounded-full blur-3xl mix-blend-multiply"></div>
+          <div className="absolute top-0 -right-24 w-96 h-96 bg-primary-container/20 rounded-full blur-3xl mix-blend-multiply pointer-events-none"></div>
+          <div className="absolute bottom-0 -left-24 w-80 h-80 bg-secondary/10 rounded-full blur-3xl mix-blend-multiply pointer-events-none"></div>
 
           <div className="w-full max-w-lg relative z-10">
+            {isQueueOpen ? (
+            <>
             <div className="text-center mb-10">
               <span className="text-3xl font-black tracking-tighter text-primary block mb-2 font-headline">Lot 5 Barbershop</span>
               <div className="h-1 w-12 bg-secondary mx-auto rounded-full"></div>
@@ -260,6 +272,17 @@ export default function Home() {
                 </div>
               </div>
             </div>
+            </>
+            ) : (
+               <div className="bg-red-50 rounded-[2rem] shadow-xl overflow-hidden border-2 border-red-500/20 text-center p-12 relative animate-in zoom-in duration-500">
+                 <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+                 <div className="w-24 h-24 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
+                    <span className="material-symbols-outlined text-5xl text-red-600 font-black">block</span>
+                 </div>
+                 <h1 className="font-headline text-4xl font-extrabold tracking-tight text-red-600 mb-4">Queue Closed</h1>
+                 <p className="text-red-900/80 font-medium leading-relaxed mb-8">We have reached maximum capacity for today. Please try again tomorrow. Walk-ins may still be accepted depending on availability.</p>
+               </div>
+            )}
             
             <div className="mt-8 flex justify-center gap-8">
                 <a href="#" className="text-xs font-bold text-on-surface-variant hover:text-secondary transition-colors uppercase tracking-widest flex items-center gap-1">Policy</a>
@@ -273,7 +296,7 @@ export default function Home() {
            key="dashboard"
            initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} 
            transition={{ duration: 0.8, delay: 0.2 }}
-           className="pt-32 pb-32 px-4 max-w-lg mx-auto md:max-w-4xl relative z-10 min-h-screen"
+           className="px-0 relative z-10 min-h-[70vh]"
         >
           {myTicketStatus === 'CALLED' ? (
              <div className="flex flex-col items-center justify-center min-h-[60vh] text-center px-4 animate-in fade-in zoom-in duration-500">
@@ -375,51 +398,83 @@ export default function Home() {
       )}
       </AnimatePresence>
 
-      {/* Promotional / Information Section (Quality & Efficiency) */}
-      <section className="w-full max-w-6xl mx-auto px-6 pb-32 mt-12 relative z-10">
-        
-        {/* "Why Choose Us" Bento Block */}
-        <div className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-12">
-            {/* Title Block - Dark */}
-            <div className="md:col-span-1 bg-[#1a1a1a] text-white p-8 rounded-[2rem] flex flex-col justify-center shadow-lg hover:shadow-xl transition-shadow">
-                <h2 className="font-headline text-4xl lg:text-5xl font-black leading-none tracking-tight mb-6 mt-4">Why<br/>choose<br/>Lot 5?</h2>
-                <div className="w-12 h-1.5 bg-[#e5f638] rounded-full mt-auto"></div>
-            </div>
-            
-            {/* Value Props - Light */}
-            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
-                <span className="material-symbols-outlined text-[#e5f638] bg-[#596000] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>content_cut</span>
-                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Master Quality</h3>
-                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Every cut is an editorial masterpiece, crafted with precision by master barbers in an upscale environment.</p>
-            </div>
-            
-            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
-                <span className="material-symbols-outlined text-[#004be2] bg-[#c5d0ff] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
-                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Maximum Efficiency</h3>
-                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Skip the waiting room. Track your exact turn live, jump in the queue from anywhere, and arrive right as your chair opens.</p>
-            </div>
-
-            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col justify-center gap-4 hover:shadow-md transition-shadow">
-                <span className="material-symbols-outlined text-white bg-[#1a1a1a] w-14 h-14 rounded-full flex items-center justify-center text-3xl font-black shadow-sm" style={{ fontVariationSettings: "'FILL' 1" }}>spa</span>
-                <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e]">Premium Vibe</h3>
-                <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Enjoy complimentary premium beverages, hot towel finishing, and the very best grooming products on the market.</p>
-            </div>
+          {/* Scroll Down Hint */}
+          <motion.div 
+            initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 1 }}
+            className="absolute bottom-4 left-1/2 -translate-x-1/2 flex flex-col items-center gap-2 text-on-surface-variant cursor-pointer group pb-4"
+            onClick={() => {
+                if (typeof window !== 'undefined') window.scrollTo({ top: window.innerHeight * 0.9, behavior: 'smooth' })
+            }}
+          >
+            <span className="text-[10px] font-bold uppercase tracking-widest group-hover:text-[#004be2] transition-colors">Swipe Down</span>
+            <motion.span 
+               animate={{ y: [0, 8, 0] }} transition={{ duration: 1.5, repeat: Infinity, ease: "easeInOut" }}
+               className="material-symbols-outlined group-hover:text-[#004be2] transition-colors"
+            >
+              expand_more
+            </motion.span>
+          </motion.div>
         </div>
 
-        {/* Gallery Section */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-md group border-4 border-white">
-                <img src="/barber-1.jpg" alt="Master barber fading hair" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
-            </div>
-            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-lg group md:-translate-y-8 border-4 border-white">
-                <img src="/barber-2.jpg" alt="Precision haircutting work" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
-            </div>
-            <div className="rounded-[2rem] overflow-hidden aspect-square md:aspect-[4/5] border border-outline-variant/5 shadow-md group border-4 border-white">
-                <img src="/barber-3.jpg" alt="Stylist finishing the trim" className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-1000 ease-out"/>
-            </div>
+        {/* SCISSORS SLICING DIVIDER */}
+        <div className="w-full block relative overflow-hidden py-16 max-w-5xl mx-auto opacity-80 pt-8 pb-16">
+            <div className="absolute top-1/2 left-0 w-full border-t-2 border-dashed border-[#e5f638]"></div>
+            <motion.div 
+               animate={{ x: ["-10vw", "95vw"] }} 
+               transition={{ duration: 5, repeat: Infinity, ease: "linear" }}
+               className="absolute top-1/2 -translate-y-[50%] flex items-center pr-2"
+            >
+               <span className="material-symbols-outlined text-[#545b00] text-2xl bg-white rounded-full p-2 border border-[#e5f638] shadow-sm transform -rotate-90" style={{ fontVariationSettings: "'FILL' 1" }}>content_cut</span>
+            </motion.div>
         </div>
-      </section>
-      
+
+        {/* BOTTOM SECTION: Promotional & Information */}
+        <div className="w-full max-w-4xl mx-auto flex flex-col gap-6 px-4 md:px-8 pb-32">
+             <div className="bg-[#1a1a1a] text-white p-8 rounded-[2rem] flex flex-col justify-center shadow-lg text-center md:text-left">
+                <h2 className="font-headline text-4xl font-black leading-none tracking-tight mb-4 mt-2">Why choose Lot 5?</h2>
+                <div className="w-12 h-1.5 bg-[#e5f638] rounded-full mx-auto md:mx-0"></div>
+             </div>
+
+             <div className="grid grid-cols-1 gap-6">
+                 {/* Card 1 */}
+                 <div className="bg-white rounded-[2rem] border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col md:flex-row items-stretch group hover:shadow-md transition-shadow">
+                     <div className="w-full md:w-2/5 h-64 md:h-auto shrink-0 overflow-hidden relative">
+                         <img src="/barber-1.jpg" alt="Master Quality" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+                     </div>
+                     <div className="p-8 md:p-10 flex flex-col justify-center gap-2 relative w-full">
+                         <span className="absolute -top-6 md:top-auto md:-left-6 right-8 md:right-auto bg-[#e5f638] text-[#545b00] w-14 h-14 rounded-full flex items-center justify-center font-black shadow-md border-4 border-white material-symbols-outlined z-10 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>content_cut</span>
+                         <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e] mt-2">Master Quality</h3>
+                         <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Every cut is an editorial masterpiece crafted with precision in an upscale environment.</p>
+                     </div>
+                 </div>
+
+                 {/* Card 2 */}
+                  <div className="bg-white rounded-[2rem] border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col md:flex-row items-stretch group hover:shadow-md transition-shadow">
+                     <div className="w-full md:w-2/5 h-64 md:h-auto shrink-0 overflow-hidden relative">
+                         <img src="/barber-2.jpg" alt="Maximum Efficiency" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+                     </div>
+                     <div className="p-8 md:p-10 flex flex-col justify-center gap-2 relative w-full">
+                         <span className="absolute -top-6 md:top-auto md:-left-6 right-8 md:right-auto bg-[#c5d0ff] text-[#004be2] w-14 h-14 rounded-full flex items-center justify-center font-black shadow-md border-4 border-white material-symbols-outlined z-10 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>timer</span>
+                         <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e] mt-2">Max Efficiency</h3>
+                         <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Skip the waiting room. Track your turn live and arrive right as your chair opens.</p>
+                     </div>
+                 </div>
+
+                 {/* Card 3 */}
+                  <div className="bg-white rounded-[2rem] border border-outline-variant/10 shadow-sm overflow-hidden flex flex-col md:flex-row items-stretch group hover:shadow-md transition-shadow">
+                     <div className="w-full md:w-2/5 h-64 md:h-auto shrink-0 overflow-hidden relative">
+                         <img src="/barber-3.jpg" alt="Premium Vibe" className="absolute inset-0 w-full h-full object-cover group-hover:scale-105 transition-transform duration-700 ease-out" />
+                     </div>
+                     <div className="p-8 md:p-10 flex flex-col justify-center gap-2 relative w-full">
+                         <span className="absolute -top-6 md:top-auto md:-left-6 right-8 md:right-auto bg-[#1a1a1a] text-white w-14 h-14 rounded-full flex items-center justify-center font-black shadow-md border-4 border-white material-symbols-outlined z-10 text-xl" style={{ fontVariationSettings: "'FILL' 1" }}>spa</span>
+                         <h3 className="font-headline font-extrabold text-2xl text-[#2f2e2e] mt-2">Premium Vibe</h3>
+                         <p className="text-sm text-on-surface-variant font-medium leading-relaxed">Premium beverages, hot towel finishing, and the absolute best grooming products.</p>
+                     </div>
+                 </div>
+             </div>
+        </div>
+
+      </div>
     </div>
   )
 }

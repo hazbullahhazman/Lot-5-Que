@@ -8,6 +8,7 @@ import { motion, AnimatePresence } from 'framer-motion'
 export default function AdminDashboard() {
   const [currentServing, setCurrentServing] = useState(0)
   const [queue, setQueue] = useState<any[]>([])
+  const [isQueueOpen, setIsQueueOpen] = useState(true)
 
   useEffect(() => {
     fetchData()
@@ -16,7 +17,10 @@ export default function AdminDashboard() {
   const fetchData = async () => {
     try {
         const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single()
-        if (settingsData) setCurrentServing(settingsData.current_serving_number || 0)
+        if (settingsData) {
+            setCurrentServing(settingsData.current_serving_number || 0)
+            if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+        }
 
         const { data: queueData } = await supabase
           .from('queue_entries')
@@ -35,6 +39,32 @@ export default function AdminDashboard() {
             ])
         }
     }
+  }
+
+  const toggleQueue = async () => {
+      const newState = !isQueueOpen;
+      setIsQueueOpen(newState);
+      try { await supabase.from('settings').update({ is_accepting_bookings: newState }).eq('id', 1) } 
+      catch (err) { console.error('Offline toggle', err) }
+  }
+
+  const downloadCSV = () => {
+    const csvContent = "data:text/csv;charset=utf-8," 
+      + "Date,Time,Customer,Service,Wait Time (Mins)\n"
+      + "2024-03-29,10:15 AM,John Doe,Skin Fade,15\n"
+      + "2024-03-29,11:30 AM,Michael Smith,Classic Cut,22\n"
+      + "2024-03-29,12:45 PM,Chris Evans,Beard Trim,5\n"
+      + "2024-03-29,02:10 PM,David Lee,Buzz Cut,10\n"
+      + "2024-03-29,02:40 PM,Robert King,Line Up,5\n"
+      + "2024-03-29,04:20 PM,Will Thomas,Skin Fade,18\n";
+    
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", `lot5_analytics_${new Date().toISOString().split('T')[0]}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
   }
 
   const handleCallCustomer = async (ticketId: string, customerName: string) => {
@@ -135,7 +165,7 @@ export default function AdminDashboard() {
       <main className="md:pl-64 pt-24 pb-32 px-6 min-h-screen max-w-[1400px] mx-auto">
         
         {/* Header Section with Bento Stats */}
-        <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+        <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <div className="md:col-span-2 bg-[#ffffe6] p-8 rounded-[2rem] relative overflow-hidden flex flex-col justify-center border border-[#e5f638]/20 shadow-sm">
             <div className="relative z-10">
               <h1 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface mb-2">Morning, Lot 5.</h1>
@@ -149,6 +179,17 @@ export default function AdminDashboard() {
             <p className="text-[#545b00] font-headline font-bold text-xs uppercase tracking-widest mb-1">Avg. Wait Time</p>
             <div className="text-6xl font-black font-headline text-[#545b00]">24</div>
             <p className="text-[#545b00]/80 text-sm font-bold">Minutes</p>
+          </div>
+
+          {/* STOP QUEUE TOGGLE */}
+          <div className={`p-6 rounded-[2rem] flex flex-col items-center justify-center text-center shadow-sm transition-colors cursor-pointer border-2 ${isQueueOpen ? 'bg-white border-green-500/20 hover:border-green-500' : 'bg-red-50 border-red-500 shadow-[0_0_30px_rgba(239,68,68,0.2)]'}`} onClick={toggleQueue}>
+             <div className="w-12 h-12 rounded-full mb-3 flex items-center justify-center transform transition-transform active:scale-95" style={{ backgroundColor: isQueueOpen ? '#10B981' : '#EF4444' }}>
+                <span className="material-symbols-outlined text-white font-black">{isQueueOpen ? 'check' : 'block'}</span>
+             </div>
+             <p className={`font-headline font-extrabold text-lg leading-tight ${isQueueOpen ? 'text-green-600' : 'text-red-600'}`}>
+               {isQueueOpen ? 'Accepting Sign-ins' : 'Queue Closed'}
+             </p>
+             <p className="text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mt-2">Tap to Toggle</p>
           </div>
         </section>
 
@@ -299,6 +340,51 @@ export default function AdminDashboard() {
              </div>
           </div>
         </section>
+
+        {/* Statistics & Analytics */}
+        <section className="mt-12 bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
+          <div className="flex justify-between items-center mb-10">
+            <div>
+              <h3 className="font-headline font-bold text-2xl text-on-surface">Daily Traffic Analysis</h3>
+              <p className="text-sm text-on-surface-variant font-medium">Identify peak hours to optimize stylist scheduling.</p>
+            </div>
+            <button onClick={downloadCSV} className="bg-[#e5f638] text-[#545b00] px-6 py-3 rounded-full font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition-all flex items-center gap-2 border border-[#545b00]/10">
+              <span className="material-symbols-outlined font-black text-lg">download</span>
+              Export Latest CSV
+            </button>
+          </div>
+          
+          <div className="h-64 flex items-end gap-2 md:gap-4 mt-10 px-2 relative">
+             {/* Chart grid lines */}
+             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 border-b border-l border-on-surface-variant/50 pt-4 pb-8">
+                <div className="w-full h-[1px] bg-on-surface-variant"></div>
+                <div className="w-full h-[1px] bg-on-surface-variant"></div>
+                <div className="w-full h-[1px] bg-on-surface-variant"></div>
+             </div>
+             
+             {/* Dynamic Layout Chart! */}
+             {[
+               { time: "9 AM", count: 2, height: "h-[10%]" },
+               { time: "10 AM", count: 5, height: "h-[25%]" },
+               { time: "11 AM", count: 8, height: "h-[40%]" },
+               { time: "12 PM", count: 14, height: "h-[70%]" },
+               { time: "1 PM", count: 18, height: "h-[90%]", peak: true },
+               { time: "2 PM", count: 12, height: "h-[60%]" },
+               { time: "3 PM", count: 9, height: "h-[45%]" },
+               { time: "4 PM", count: 15, height: "h-[75%]" },
+               { time: "5 PM", count: 20, height: "h-[100%]", peak: true },
+               { time: "6 PM", count: 11, height: "h-[55%]" },
+               { time: "7 PM", count: 6, height: "h-[30%]" },
+             ].map((stat, i) => (
+               <div key={i} className="relative flex-1 group flex flex-col justify-end items-center h-full break-normal pt-10 cursor-crosshair">
+                  <div className={`w-full rounded-t-xl transition-all duration-500 ease-out group-hover:bg-[#004be2] z-10 ${stat.peak ? 'bg-[#c5d0ff]' : 'bg-surface-container-highest'} ${stat.height}`}></div>
+                  <span className="absolute -bottom-6 text-[10px] font-bold text-on-surface-variant whitespace-nowrap">{stat.time}</span>
+                  <span className="absolute -top-6 opacity-0 group-hover:opacity-100 text-xs font-black text-[#004be2] transition-opacity bg-white px-2 py-1 rounded-md shadow-sm border border-[#004be2]/20">{stat.count}</span>
+               </div>
+             ))}
+          </div>
+        </section>
+
       </main>
 
     </div>
