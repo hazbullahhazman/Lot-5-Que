@@ -252,7 +252,7 @@ export default function Home() {
               <div className="p-8 md:p-12">
                 <header className="mb-8 items-start">
                   <h1 className="font-headline text-4xl font-extrabold tracking-tight text-on-background leading-none mb-4">Join the Queue</h1>
-                  <p className="text-on-surface-variant text-sm font-medium leading-relaxed max-w-xs">Enter your details to secure your spot in today's rotation. We'll text you when your chair is ready.</p>
+                  <p className="text-on-surface-variant text-sm font-medium leading-relaxed max-w-xs">Enter your details to secure your spot in today&apos;s rotation. We&apos;ll text you when your chair is ready.</p>
                 </header>
 
                 <form onSubmit={joinQueue} className="space-y-6">
@@ -309,7 +309,7 @@ export default function Home() {
                     <span className="material-symbols-outlined text-5xl text-red-600 font-black">block</span>
                  </div>
                  <h1 className="font-headline text-4xl font-extrabold tracking-tight text-red-600 mb-4">Queue Closed</h1>
-                 <p className="text-red-900/80 font-medium leading-relaxed mb-8 text-lg">We’re currently at full capacity due to high demand. Please try again shortly or try again tomorrow.</p>
+                 <p className="text-red-900/80 font-medium leading-relaxed mb-8 text-lg">We&apos;re currently at full capacity due to high demand. Please try again shortly or try again tomorrow.</p>
                </div>
             )}
             
@@ -343,7 +343,7 @@ export default function Home() {
           <>
           <section className="mb-10 text-center">
             <h1 className="font-headline text-5xl font-extrabold tracking-tight text-primary-dim mb-2">Live Status</h1>
-            <p className="text-on-surface-variant font-medium">Sit back and relax. We'll notify you when it's your turn.</p>
+            <p className="text-on-surface-variant font-medium">Sit back and relax. We&apos;ll notify you when it&apos;s your turn.</p>
           </section>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">

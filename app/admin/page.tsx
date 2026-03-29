@@ -483,7 +483,7 @@ export default function AdminDashboard() {
           {/* Metrics Row */}
           <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
             <div className="bg-[#e5f638] p-8 rounded-[2rem] flex flex-col items-start shadow-sm border border-[#545b00]/10 relative overflow-hidden">
-               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-2 z-10">Today's Traffic</span>
+               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-2 z-10">Today&apos;s Traffic</span>
                <div className="flex items-baseline gap-2 z-10">
                  <span className="font-headline text-6xl font-black text-[#545b00] tracking-tighter leading-none">{crmMetrics.today}</span>
                  <span className="font-headline text-lg font-bold text-[#545b00]">Cuts</span>
