@@ -59,16 +59,28 @@ export default function Home() {
         }
       })
       .subscribe()
+      
+    // Listen for offline tab sync if Admin toggles in another tab without Supabase
+    const handleStorageChange = (e: StorageEvent) => {
+        if (e.key === 'lot5_queue_open') setIsQueueOpen(e.newValue === 'true')
+    }
+    window.addEventListener('storage', handleStorageChange)
 
-    return () => { supabase.removeChannel(channel) }
+    return () => { 
+        supabase.removeChannel(channel)
+        window.removeEventListener('storage', handleStorageChange)
+    }
   }, [])
 
   const fetchInitialData = async () => {
     try {
-        const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single()
-        if (settingsData) {
+        const { data: settingsData, error } = await supabase.from('settings').select('*').limit(1).single()
+        if (settingsData && !error) {
             setCurrentServing(settingsData.current_serving_number || 0)
             if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+        } else {
+            const offlineState = localStorage.getItem('lot5_queue_open');
+            if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
         }
 
         const { data: queueData } = await supabase
@@ -113,8 +125,16 @@ export default function Home() {
     
     try {
         // PRE-FLIGHT CHECK: Ensure the queue wasn't closed by Admin just now
-        const { data: settingsData } = await supabase.from('settings').select('is_accepting_bookings').limit(1).single()
-        if (settingsData && settingsData.is_accepting_bookings === false) {
+        let trulyOpen = isQueueOpen;
+        try {
+            const { data: settingsData, error } = await supabase.from('settings').select('is_accepting_bookings').limit(1).single()
+            if (settingsData && !error) trulyOpen = settingsData.is_accepting_bookings;
+        } catch(err) {
+            const offlineState = localStorage.getItem('lot5_queue_open');
+            if (offlineState !== null) trulyOpen = offlineState === 'true';
+        }
+
+        if (trulyOpen === false) {
              setIsQueueOpen(false)
              alert("We’re currently at full capacity due to high demand. Please try again shortly or try again tomorrow.")
              setLoading(false)

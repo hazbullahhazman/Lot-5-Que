@@ -106,10 +106,13 @@ export default function AdminDashboard() {
 
   const fetchData = async () => {
     try {
-        const { data: settingsData } = await supabase.from('settings').select('*').limit(1).single()
-        if (settingsData) {
+        const { data: settingsData, error } = await supabase.from('settings').select('*').limit(1).single()
+        if (settingsData && !error) {
             setCurrentServing(settingsData.current_serving_number || 0)
             if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+        } else {
+            const offlineState = localStorage.getItem('lot5_queue_open');
+            if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
         }
 
         const { data: queueData } = await supabase
@@ -146,7 +149,8 @@ export default function AdminDashboard() {
   const toggleQueue = async () => {
       const newState = !isQueueOpen;
       setIsQueueOpen(newState);
-      try { await supabase.from('settings').update({ is_accepting_bookings: newState }).eq('id', 1) } 
+      if (typeof window !== 'undefined') localStorage.setItem('lot5_queue_open', String(newState));
+      try { await supabase.from('settings').upsert({ id: 1, is_accepting_bookings: newState }) } 
       catch (err) { console.error('Offline toggle', err) }
   }
 
