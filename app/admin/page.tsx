@@ -9,10 +9,100 @@ export default function AdminDashboard() {
   const [currentServing, setCurrentServing] = useState(0)
   const [queue, setQueue] = useState<any[]>([])
   const [isQueueOpen, setIsQueueOpen] = useState(true)
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers'>('overview')
+
+  // Dynamic CRM Data
+  const [historicalQueue, setHistoricalQueue] = useState<any[]>([])
+  const [crmMetrics, setCrmMetrics] = useState({ today: 0, week: 0, month: 0 })
+  const [chartData, setChartData] = useState<any[]>([])
 
   useEffect(() => {
     fetchData()
   }, [])
+
+  const calculateCRM = (data: any[]) => {
+      const now = new Date();
+      let todayCount = 0; let weekCount = 0; let monthCount = 0;
+      const hourCounts: Record<number, number> = {};
+      const uniqueDays = new Set();
+      const formattedHistorical: any[] = [];
+
+      data.forEach(item => {
+          if(!item.created_at) return;
+          const d = new Date(item.created_at);
+          if (isNaN(d.getTime())) return;
+          
+          uniqueDays.add(d.toDateString());
+          
+          if (item.status === 'COMPLETED' || item.status === 'SERVING') {
+             const diffTime = Math.abs(now.getTime() - d.getTime());
+             const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24)); 
+             if (diffDays <= 1) todayCount++;
+             if (diffDays <= 7) weekCount++;
+             if (diffDays <= 30) monthCount++;
+          }
+          
+          const hour = d.getHours();
+          if (hour >= 9 && hour <= 19) {
+             hourCounts[hour] = (hourCounts[hour] || 0) + 1;
+          }
+
+          formattedHistorical.push({
+              id: item.id,
+              date: d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }),
+              time: d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' }),
+              name: item.customer_name || 'Walk-in',
+              service: item.service || 'Standard Cut',
+              phone: item.phone_number || '-',
+              status: item.status
+          })
+      });
+      
+      setCrmMetrics({ today: todayCount, week: weekCount, month: monthCount });
+      setHistoricalQueue(formattedHistorical);
+      
+      const numDays = uniqueDays.size || 1;
+      const chart = [];
+      let maxAvg = 0;
+      
+      for (let h = 9; h <= 19; h++) {
+          const avg = ((hourCounts[h] || 0) / numDays);
+          if (avg > maxAvg) maxAvg = avg;
+          const label = h > 12 ? `${h-12} PM` : (h === 12 ? `12 PM` : `${h} AM`);
+          chart.push({ time: label, count: Math.round(avg * 10) / 10, rawAvg: avg });
+      }
+      
+      const finalChart = chart.map((stat) => {
+          const pct = maxAvg === 0 ? 0 : Math.round((stat.rawAvg / maxAvg) * 100);
+          return { ...stat, heightPct: Math.max(5, pct), peak: pct > 80 }
+      });
+      setChartData(finalChart);
+  }
+
+  const generateMockCRM = () => {
+      setHistoricalQueue([
+        { id: 'h1', date: 'Today', time: '10:15 AM', name: 'John Doe', service: 'Skin Fade', phone: '(555) 123-4567', status: 'COMPLETED' },
+        { id: 'h2', date: 'Today', time: '11:30 AM', name: 'Michael Smith', service: 'Classic Cut', phone: '(555) 987-6543', status: 'COMPLETED' },
+        { id: 'h3', date: 'Yesterday', time: '02:10 PM', name: 'David Lee', service: 'Buzz Cut', phone: '(555) 246-8101', status: 'COMPLETED' },
+        { id: 'h4', date: 'Yesterday', time: '04:20 PM', name: 'Will Thomas', service: 'Skin Fade', phone: '(555) 369-1470', status: 'CANCELLED' },
+        { id: 'h5', date: 'Mar 26', time: '09:00 AM', name: 'Robert King', service: 'Line Up', phone: '(555) 555-0000', status: 'COMPLETED' },
+      ])
+      setCrmMetrics({ today: 24, week: 142, month: 618 })
+      
+      setChartData([
+         { time: "9 AM", count: 2.1, heightPct: 10, peak: false },
+         { time: "10 AM", count: 4.5, heightPct: 25, peak: false },
+         { time: "11 AM", count: 7.8, heightPct: 40, peak: false },
+         { time: "12 PM", count: 14.0, heightPct: 70, peak: false },
+         { time: "1 PM", count: 18.2, heightPct: 90, peak: true },
+         { time: "2 PM", count: 12.5, heightPct: 60, peak: false },
+         { time: "3 PM", count: 9.3, heightPct: 45, peak: false },
+         { time: "4 PM", count: 15.1, heightPct: 75, peak: false },
+         { time: "5 PM", count: 20.4, heightPct: 100, peak: true },
+         { time: "6 PM", count: 11.0, heightPct: 55, peak: false },
+         { time: "7 PM", count: 6.2, heightPct: 30, peak: false },
+       ])
+  }
 
   const fetchData = async () => {
     try {
@@ -28,6 +118,17 @@ export default function AdminDashboard() {
           .in('status', ['WAITING', 'CALLED'])
           .order('queue_number', { ascending: true })
         if (queueData) setQueue(queueData)
+
+        const { data: allData, error } = await supabase
+          .from('queue_entries')
+          .select('*')
+          .order('created_at', { ascending: false })
+          
+        if (allData && !error) {
+            calculateCRM(allData)
+        } else {
+            generateMockCRM()
+        }
     } catch(err) {
         if(queue.length === 0) {
             setCurrentServing(12)
@@ -37,6 +138,7 @@ export default function AdminDashboard() {
                 { id: '3', queue_number: 16, customer_name: 'Aaron Rodriguez', service: 'Buzz Cut', phone_number: '(555) 246-8101', status: 'WAITING' },
                 { id: '4', queue_number: 17, customer_name: 'Simon Lee', service: 'Long Hair Trim', phone_number: '(555) 369-1470', status: 'WAITING' },
             ])
+            generateMockCRM()
         }
     }
   }
@@ -140,14 +242,18 @@ export default function AdminDashboard() {
         </button>
         
         <nav className="flex-1 space-y-1">
-          <a href="#" className="flex items-center gap-3 bg-[#c5d0ff] text-[#004be2] rounded-lg px-4 py-3 scale-[0.98] shadow-sm">
-            <LayoutDashboard className="w-5 h-5 text-[#004be2]" />
+          <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 rounded-lg px-4 py-3 transition-all ${activeTab === 'overview' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm' : 'text-gray-500 hover:bg-surface hover:translate-x-1'}`}>
+            <LayoutDashboard className={`w-5 h-5 ${activeTab === 'overview' ? 'text-[#004be2]' : ''}`} />
             <span className="font-headline font-semibold tracking-tight">Overview</span>
-          </a>
-          <a href="#" className="flex items-center gap-3 text-gray-500 px-4 py-3 hover:translate-x-1 transition-transform">
-            <Users className="w-5 h-5" />
+          </button>
+          <button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 rounded-lg px-4 py-3 transition-all ${activeTab === 'customers' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm' : 'text-gray-500 hover:bg-surface hover:translate-x-1'}`}>
+            <Users className={`w-5 h-5 ${activeTab === 'customers' ? 'text-[#004be2]' : ''}`} />
+            <span className="font-headline font-semibold tracking-tight">Customers</span>
+          </button>
+          <button className="w-full flex items-center gap-3 text-gray-500 px-4 py-3 hover:translate-x-1 transition-transform">
+            <span className="material-symbols-outlined text-xl">settings_applications</span>
             <span className="font-headline font-semibold tracking-tight">Management</span>
-          </a>
+          </button>
         </nav>
         <div className="mt-auto space-y-1">
           <a href="#" className="flex items-center gap-3 text-gray-500 px-4 py-3 hover:translate-x-1 transition-transform">
@@ -163,7 +269,8 @@ export default function AdminDashboard() {
 
       {/* Main Content */}
       <main className="md:pl-64 pt-24 pb-32 px-6 min-h-screen max-w-[1400px] mx-auto">
-        
+        {activeTab === 'overview' ? (
+        <>
         {/* Header Section with Bento Stats */}
         <section className="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
           <div className="md:col-span-2 bg-[#ffffe6] p-8 rounded-[2rem] relative overflow-hidden flex flex-col justify-center border border-[#e5f638]/20 shadow-sm">
@@ -341,50 +448,129 @@ export default function AdminDashboard() {
           </div>
         </section>
 
-        {/* Statistics & Analytics */}
-        <section className="mt-12 bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
-          <div className="flex justify-between items-center mb-10">
-            <div>
-              <h3 className="font-headline font-bold text-2xl text-on-surface">Daily Traffic Analysis</h3>
-              <p className="text-sm text-on-surface-variant font-medium">Identify peak hours to optimize stylist scheduling.</p>
-            </div>
-            <button onClick={downloadCSV} className="bg-[#e5f638] text-[#545b00] px-6 py-3 rounded-full font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition-all flex items-center gap-2 border border-[#545b00]/10">
-              <span className="material-symbols-outlined font-black text-lg">download</span>
-              Export Latest CSV
-            </button>
-          </div>
+        </>
+        ) : (
+        /* -- CUSTOMERS CRM VIEW -- */
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           
-          <div className="h-64 flex items-end gap-2 md:gap-4 mt-10 px-2 relative">
-             {/* Chart grid lines */}
-             <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 border-b border-l border-on-surface-variant/50 pt-4 pb-8">
-                <div className="w-full h-[1px] bg-on-surface-variant"></div>
-                <div className="w-full h-[1px] bg-on-surface-variant"></div>
-                <div className="w-full h-[1px] bg-on-surface-variant"></div>
-             </div>
-             
-             {/* Dynamic Layout Chart! */}
-             {[
-               { time: "9 AM", count: 2, height: "h-[10%]" },
-               { time: "10 AM", count: 5, height: "h-[25%]" },
-               { time: "11 AM", count: 8, height: "h-[40%]" },
-               { time: "12 PM", count: 14, height: "h-[70%]" },
-               { time: "1 PM", count: 18, height: "h-[90%]", peak: true },
-               { time: "2 PM", count: 12, height: "h-[60%]" },
-               { time: "3 PM", count: 9, height: "h-[45%]" },
-               { time: "4 PM", count: 15, height: "h-[75%]" },
-               { time: "5 PM", count: 20, height: "h-[100%]", peak: true },
-               { time: "6 PM", count: 11, height: "h-[55%]" },
-               { time: "7 PM", count: 6, height: "h-[30%]" },
-             ].map((stat, i) => (
-               <div key={i} className="relative flex-1 group flex flex-col justify-end items-center h-full break-normal pt-10 cursor-crosshair">
-                  <div className={`w-full rounded-t-xl transition-all duration-500 ease-out group-hover:bg-[#004be2] z-10 ${stat.peak ? 'bg-[#c5d0ff]' : 'bg-surface-container-highest'} ${stat.height}`}></div>
-                  <span className="absolute -bottom-6 text-[10px] font-bold text-on-surface-variant whitespace-nowrap">{stat.time}</span>
-                  <span className="absolute -top-6 opacity-0 group-hover:opacity-100 text-xs font-black text-[#004be2] transition-opacity bg-white px-2 py-1 rounded-md shadow-sm border border-[#004be2]/20">{stat.count}</span>
-               </div>
-             ))}
+          <div className="mb-8">
+            <h1 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface mb-2">Customer Database</h1>
+            <p className="text-on-surface-variant font-medium">Track your historical traffic and manage client records.</p>
           </div>
-        </section>
 
+          {/* Metrics Row */}
+          <section className="grid grid-cols-1 md:grid-cols-3 gap-6 mb-10">
+            <div className="bg-[#e5f638] p-8 rounded-[2rem] flex flex-col items-start shadow-sm border border-[#545b00]/10 relative overflow-hidden">
+               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-2 z-10">Today's Traffic</span>
+               <div className="flex items-baseline gap-2 z-10">
+                 <span className="font-headline text-6xl font-black text-[#545b00] tracking-tighter leading-none">{crmMetrics.today}</span>
+                 <span className="font-headline text-lg font-bold text-[#545b00]">Cuts</span>
+               </div>
+               <span className="material-symbols-outlined text-[8rem] text-white/30 absolute -bottom-6 -right-4 rotate-[-15deg] pointer-events-none" style={{ fontVariationSettings: "'FILL' 1" }}>groups</span>
+            </div>
+            
+            <div className="bg-[#c5d0ff] p-8 rounded-[2rem] flex flex-col items-start shadow-sm relative overflow-hidden">
+               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-2 z-10">This Week</span>
+               <div className="flex items-baseline gap-2 z-10">
+                 <span className="font-headline text-6xl font-black text-[#004be2] tracking-tighter leading-none">{crmMetrics.week}</span>
+                 <span className="font-headline text-lg font-bold text-[#004be2]">Cuts</span>
+               </div>
+               <span className="material-symbols-outlined text-[8rem] text-white/30 absolute -bottom-6 -right-4 rotate-[-15deg] pointer-events-none" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_view_week</span>
+            </div>
+
+            <div className="bg-white p-8 rounded-[2rem] border border-outline-variant/10 shadow-sm flex flex-col items-start relative overflow-hidden">
+               <span className="text-sm font-label font-bold uppercase tracking-widest text-on-surface-variant mb-2 z-10">This Month</span>
+               <div className="flex items-baseline gap-2 z-10">
+                 <span className="font-headline text-6xl font-black text-on-surface tracking-tighter leading-none">{crmMetrics.month}</span>
+                 <span className="font-headline text-lg font-bold text-on-surface-variant">Cuts</span>
+               </div>
+               <span className="material-symbols-outlined text-[8rem] text-on-surface-variant/5 absolute -bottom-6 -right-4 rotate-[-15deg] pointer-events-none" style={{ fontVariationSettings: "'FILL' 1" }}>calendar_month</span>
+            </div>
+          </section>
+
+          {/* CRM TABLE */}
+          <section className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-outline-variant/10 mb-10">
+            <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-white border-b border-outline-variant/5 gap-4">
+               <h2 className="font-headline font-bold text-2xl text-on-surface">Client History</h2>
+               <div className="relative w-full md:w-auto">
+                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 text-outline-variant w-4 h-4" />
+                 <input className="w-full md:w-auto bg-surface-container-low border-none rounded-xl pl-10 pr-4 py-2 text-sm focus:ring-2 focus:ring-secondary/20 min-w-[200px]" placeholder="Search records..." type="text"/>
+               </div>
+            </div>
+            <div className="overflow-x-auto max-h-[400px]">
+              <table className="w-full text-left border-collapse">
+                <thead className="sticky top-0 z-10 bg-surface/90 backdrop-blur-md">
+                  <tr className="text-on-surface-variant text-xs font-bold uppercase tracking-widest border-b border-outline-variant/5">
+                     <th className="px-8 py-4">Date & Time</th>
+                     <th className="px-8 py-4">Customer</th>
+                     <th className="px-8 py-4">Service</th>
+                     <th className="px-8 py-4 text-center">Status</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-outline-variant/5">
+                  {historicalQueue.map(h => (
+                      <tr key={h.id} className="hover:bg-surface transition-colors cursor-pointer">
+                          <td className="px-8 py-5">
+                             <p className="font-bold text-sm text-on-surface">{h.date}</p>
+                             <p className="text-xs text-on-surface-variant">{h.time}</p>
+                          </td>
+                          <td className="px-8 py-5">
+                             <p className="font-bold text-sm text-on-surface">{h.name}</p>
+                             <p className="text-xs text-on-surface-variant">{h.phone}</p>
+                          </td>
+                          <td className="px-8 py-5">
+                             <span className="bg-surface-container-high px-3 py-1 rounded-md text-xs font-bold text-on-surface-variant">{h.service}</span>
+                          </td>
+                          <td className="px-8 py-5 text-center">
+                             {h.status === 'COMPLETED' ? (
+                                <span className="inline-flex items-center gap-1 text-[#10B981] bg-[#10B981]/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                                   <Check className="w-3 h-3" /> Served
+                                </span>
+                             ) : (
+                                <span className="inline-flex items-center gap-1 text-red-500 bg-red-500/10 px-3 py-1 rounded-full text-xs font-bold uppercase tracking-widest">
+                                   <X className="w-3 h-3" /> Cancelled
+                                </span>
+                             )}
+                          </td>
+                      </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          {/* Statistics & Analytics */}
+          <section className="bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
+            <div className="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-4">
+              <div>
+                <h3 className="font-headline font-bold text-2xl text-on-surface">Daily Traffic Analysis</h3>
+                <p className="text-sm text-on-surface-variant font-medium">Identify peak hours to optimize stylist scheduling.</p>
+              </div>
+              <button onClick={downloadCSV} className="bg-[#e5f638] text-[#545b00] px-6 py-3 rounded-full font-bold text-sm tracking-wide shadow-sm hover:shadow-md transition-all flex items-center gap-2 border border-[#545b00]/10 whitespace-nowrap">
+                <span className="material-symbols-outlined font-black text-lg">download</span>
+                Export Latest CSV
+              </button>
+            </div>
+            
+            <div className="h-64 flex items-end gap-2 md:gap-4 mt-10 px-2 relative">
+               <div className="absolute inset-0 flex flex-col justify-between pointer-events-none opacity-20 border-b border-l border-on-surface-variant/50 pt-4 pb-8">
+                  <div className="w-full h-[1px] bg-on-surface-variant"></div>
+                  <div className="w-full h-[1px] bg-on-surface-variant"></div>
+                  <div className="w-full h-[1px] bg-on-surface-variant"></div>
+               </div>
+               
+               {chartData.map((stat, i) => (
+                 <div key={i} className="relative flex-1 group flex flex-col justify-end items-center h-full break-normal pt-10 cursor-crosshair">
+                    <div style={{ height: `${stat.heightPct}%` }} className={`w-full rounded-t-xl transition-all duration-500 ease-out group-hover:bg-[#004be2] z-10 ${stat.peak ? 'bg-[#c5d0ff]' : 'bg-surface-container-highest'}`}></div>
+                    <span className="absolute -bottom-6 text-[10px] font-bold text-on-surface-variant whitespace-nowrap">{stat.time}</span>
+                    <span className="absolute -top-6 opacity-0 group-hover:opacity-100 text-xs font-black text-[#004be2] transition-opacity bg-white px-2 py-1 rounded-md shadow-sm border border-[#004be2]/20">{stat.count}</span>
+                 </div>
+               ))}
+            </div>
+          </section>
+
+        </div>
+        )}
       </main>
 
     </div>
