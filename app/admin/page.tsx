@@ -517,7 +517,7 @@ export default function AdminDashboard() {
         </section>
 
         </>
-        ) : (
+        ) : activeTab === 'customers' ? (
         /* -- CUSTOMERS CRM VIEW -- */
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
           
