@@ -5,6 +5,17 @@ import { supabase } from '@/utils/supabase'
 import { motion, AnimatePresence } from 'framer-motion'
 import { ArrowRight, User, Phone, LogOut } from 'lucide-react'
 
+type SlotBooking = {
+  id: string
+  name: string
+  phone: string
+  slot: string
+  createdAt: string
+}
+
+const SLOT_BOOKINGS_KEY = 'lot5_slot_bookings'
+const ACTIVE_SLOT_BOOKING_KEY = 'lot5_slot_booking'
+
 export default function Home() {
   const [currentServing, setCurrentServing] = useState(0)
   const [queue, setQueue] = useState<any[]>([])
@@ -25,6 +36,66 @@ export default function Home() {
   const [closeTime, setCloseTime] = useState('19:00')
   const [breakStart, setBreakStart] = useState('13:00')
   const [breakEnd, setBreakEnd] = useState('14:00')
+  const [selectedSlot, setSelectedSlot] = useState('')
+  const [slotBookings, setSlotBookings] = useState<SlotBooking[]>([])
+  const [activeSlotBooking, setActiveSlotBooking] = useState<SlotBooking | null>(null)
+  const slotConfirmed = Boolean(activeSlotBooking)
+
+  const applySettings = (settingsData?: any) => {
+    const readSetting = (field: string, storageKey: string, fallback: string | number | boolean) => {
+      if (settingsData && settingsData[field] !== undefined && settingsData[field] !== null) return settingsData[field]
+      if (typeof window !== 'undefined') {
+        const stored = localStorage.getItem(storageKey)
+        if (stored !== null) return stored
+      }
+      return fallback
+    }
+
+    const nextMode = String(readSetting('shop_mode', 'lot5_shop_mode', 'open'))
+    const nextBarbers = Number(readSetting('barbers_count', 'lot5_barbers_count', 2))
+    const nextOpenTime = String(readSetting('open_time', 'lot5_open_time', '09:00'))
+    const nextCloseTime = String(readSetting('close_time', 'lot5_close_time', '19:00'))
+    const nextBreakStart = String(readSetting('break_start', 'lot5_break_start', '13:00'))
+    const nextBreakEnd = String(readSetting('break_end', 'lot5_break_end', '14:00'))
+
+    setShopMode(nextMode)
+    setBarbersCount(Number.isFinite(nextBarbers) ? nextBarbers : 2)
+    setOpenTime(nextOpenTime)
+    setCloseTime(nextCloseTime)
+    setBreakStart(nextBreakStart)
+    setBreakEnd(nextBreakEnd)
+
+    if (nextMode === 'slot') setActiveView('slot')
+    if (nextMode === 'queue') setActiveView('queue')
+  }
+
+  const loadPersistedSlotState = () => {
+    if (typeof window === 'undefined') return
+
+    try {
+      const storedBookings = localStorage.getItem(SLOT_BOOKINGS_KEY)
+      const parsedBookings = storedBookings ? JSON.parse(storedBookings) : []
+      setSlotBookings(Array.isArray(parsedBookings) ? parsedBookings : [])
+    } catch {
+      setSlotBookings([])
+    }
+
+    try {
+      const storedActiveBooking = localStorage.getItem(ACTIVE_SLOT_BOOKING_KEY)
+      const parsedActiveBooking = storedActiveBooking ? JSON.parse(storedActiveBooking) : null
+
+      if (parsedActiveBooking) {
+        setActiveSlotBooking(parsedActiveBooking)
+        setSelectedSlot(parsedActiveBooking.slot || '')
+        setName(parsedActiveBooking.name || '')
+        setPhone(parsedActiveBooking.phone || '')
+      } else {
+        setActiveSlotBooking(null)
+      }
+    } catch {
+      setActiveSlotBooking(null)
+    }
+  }
 
   useEffect(() => {
     // 🔥 NEW: Instant LocalStorage Restore
@@ -52,8 +123,8 @@ export default function Home() {
        }
     }
 
+    loadPersistedSlotState()
     fetchInitialData()
-    // Setup Supabase Realtime Listeners
     const channel = supabase
       .channel('public-events')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
@@ -66,12 +137,28 @@ export default function Home() {
         if(payload.new.is_accepting_bookings !== undefined) {
           setIsQueueOpen(payload.new.is_accepting_bookings)
         }
+        applySettings(payload.new)
       })
       .subscribe()
-      
-    // Listen for offline tab sync if Admin toggles in another tab without Supabase
+
     const handleStorageChange = (e: StorageEvent) => {
+        const watchedKeys = new Set([
+          'lot5_queue_open',
+          'lot5_shop_mode',
+          'lot5_barbers_count',
+          'lot5_open_time',
+          'lot5_close_time',
+          'lot5_break_start',
+          'lot5_break_end',
+          SLOT_BOOKINGS_KEY,
+          ACTIVE_SLOT_BOOKING_KEY,
+        ])
+
         if (e.key === 'lot5_queue_open') setIsQueueOpen(e.newValue === 'true')
+        if (e.key && watchedKeys.has(e.key)) {
+          applySettings()
+          loadPersistedSlotState()
+        }
     }
     window.addEventListener('storage', handleStorageChange)
 
@@ -87,29 +174,12 @@ export default function Home() {
         if (settingsData && !error) {
             setCurrentServing(settingsData.current_serving_number || 0)
             if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+            applySettings(settingsData)
         } else {
             const offlineState = localStorage.getItem('lot5_queue_open');
             if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
+            applySettings()
         }
-
-        // NEW: Load Local Settings
-        try {
-            const loadedMode = localStorage.getItem('lot5_shop_mode');
-            if (loadedMode) {
-               setShopMode(loadedMode);
-               if (loadedMode === 'slot') setActiveView('slot');
-            }
-            const loadedBarbers = localStorage.getItem('lot5_barbers_count');
-            if (loadedBarbers) setBarbersCount(parseInt(loadedBarbers));
-            const oTime = localStorage.getItem('lot5_open_time');
-            if (oTime) setOpenTime(oTime);
-            const cTime = localStorage.getItem('lot5_close_time');
-            if (cTime) setCloseTime(cTime);
-            const bStart = localStorage.getItem('lot5_break_start');
-            if (bStart) setBreakStart(bStart);
-            const bEnd = localStorage.getItem('lot5_break_end');
-            if (bEnd) setBreakEnd(bEnd);
-        } catch(e) {}
 
         const { data: queueData } = await supabase
           .from('queue_entries')
@@ -137,6 +207,7 @@ export default function Home() {
             }
         }
     } catch(err) {
+        applySettings()
         if(queue.length === 0 && currentServing === 0) {
             setCurrentServing(12)
             setQueue([
@@ -144,6 +215,8 @@ export default function Home() {
                 { id: '2', queue_number: 15, customer_name: 'Mark R.', phone_number: '321' }
             ])
         }
+    } finally {
+        loadPersistedSlotState()
     }
   }
 
@@ -240,42 +313,92 @@ export default function Home() {
   else if (positionDisplay === 2) positionSuffix = "ND";
   else if (positionDisplay === 3) positionSuffix = "RD";
 
-  // Slot generation logic
-  const generateSlots = () => {
-    const slots = [];
-    try {
-        let current = new Date(`2000-01-01T${openTime}:00`);
-        const end = new Date(`2000-01-01T${closeTime}:00`);
-        const bStart = new Date(`2000-01-01T${breakStart}:00`);
-        const bEnd = new Date(`2000-01-01T${breakEnd}:00`);
-
-        while (current < end) {
-          if (current >= bStart && current < bEnd) {
-            current.setMinutes(current.getMinutes() + 30);
-            continue;
-          }
-          slots.push(current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
-          current.setMinutes(current.getMinutes() + 30);
-        }
-    } catch(e) {}
-    return slots;
-  };
-  const [selectedSlot, setSelectedSlot] = useState('');
-  const [slotConfirmed, setSlotConfirmed] = useState(false);
-  
-  const bookSlot = (e: React.FormEvent) => {
-      e.preventDefault();
-      setLoading(true);
-      setTimeout(() => {
-          setLoading(false);
-          setSlotConfirmed(true);
-      }, 1000);
+  const persistSlotBookings = (bookings: SlotBooking[]) => {
+    if (typeof window === 'undefined') return
+    localStorage.setItem(SLOT_BOOKINGS_KEY, JSON.stringify(bookings))
   }
 
+  const generateSlots = () => {
+    const slots: string[] = []
+    const reservedSlots = new Set(
+      slotBookings
+        .filter((booking) => booking.id !== activeSlotBooking?.id)
+        .map((booking) => booking.slot)
+    )
+
+    try {
+      let current = new Date(`2000-01-01T${openTime}:00`)
+      const end = new Date(`2000-01-01T${closeTime}:00`)
+      const bStart = new Date(`2000-01-01T${breakStart}:00`)
+      const bEnd = new Date(`2000-01-01T${breakEnd}:00`)
+
+      while (current < end) {
+        if (current >= bStart && current < bEnd) {
+          current.setMinutes(current.getMinutes() + 30)
+          continue
+        }
+
+        const label = current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+        if (!reservedSlots.has(label)) slots.push(label)
+        current.setMinutes(current.getMinutes() + 30)
+      }
+    } catch {}
+
+    return slots
+  }
+  
+  const bookSlot = (e: React.FormEvent) => {
+      e.preventDefault()
+      if (!selectedSlot) return
+
+      setLoading(true)
+
+      const booking: SlotBooking = {
+          id: activeSlotBooking?.id || `slot-${Date.now()}`,
+          name,
+          phone,
+          slot: selectedSlot,
+          createdAt: activeSlotBooking?.createdAt || new Date().toISOString(),
+      }
+
+      const nextBookings = [...slotBookings.filter((item) => item.id !== booking.id), booking]
+
+      try {
+          persistSlotBookings(nextBookings)
+          if (typeof window !== 'undefined') {
+              localStorage.setItem(ACTIVE_SLOT_BOOKING_KEY, JSON.stringify(booking))
+          }
+          setSlotBookings(nextBookings)
+          setActiveSlotBooking(booking)
+      } finally {
+          setLoading(false)
+      }
+  }
+
+  const cancelSlotBooking = () => {
+      if (!activeSlotBooking) return
+
+      const nextBookings = slotBookings.filter((item) => item.id !== activeSlotBooking.id)
+      setSlotBookings(nextBookings)
+      setActiveSlotBooking(null)
+      setSelectedSlot('')
+      setName('')
+      setPhone('')
+
+      if (typeof window !== 'undefined') {
+          persistSlotBookings(nextBookings)
+          localStorage.removeItem(ACTIVE_SLOT_BOOKING_KEY)
+      }
+  }
+
+  const bookingQrPayload = activeSlotBooking
+    ? `LOT5|${activeSlotBooking.id}|${activeSlotBooking.name}|${activeSlotBooking.phone}|${activeSlotBooking.slot}`
+    : ''
+
   return (
-    <div className={`min-h-screen text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container ${!joinedTicket ? 'flex flex-col bg-surface spotlight-gradient' : 'bg-[#f8fcfd] spotlight-bg'}`}>
+    <div className={`min-h-screen text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container ${!joinedTicket && !slotConfirmed ? 'flex flex-col bg-surface spotlight-gradient' : 'bg-[#f8fcfd] spotlight-bg'}`}>
       
-      {joinedTicket && (
+      {(joinedTicket || slotConfirmed) && (
         <header className="bg-white/95 backdrop-blur-md transition-colors flex justify-between items-center w-full px-6 py-4 fixed top-0 z-50 shadow-sm border-b border-outline-variant/10">
           <div className="flex items-center gap-4">
             <span className="text-2xl font-black tracking-tighter text-[#596000] font-headline">Lot 5 Barbershop</span>
@@ -334,6 +457,11 @@ export default function Home() {
                <div className="bg-surface-container-lowest rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.06)] overflow-hidden border border-outline-variant/10 p-8 md:p-12 text-left">
                    <h2 className="font-headline font-bold text-xl mb-4">Select a Time</h2>
                    <div className="grid grid-cols-3 gap-3 mb-8">
+                       {generateSlots().length === 0 && (
+                           <div className="col-span-3 rounded-xl border border-outline-variant/10 bg-surface-container-low px-4 py-6 text-center text-sm font-medium text-on-surface-variant">
+                             No slots are available in the current admin schedule.
+                           </div>
+                       )}
                        {generateSlots().map(slot => (
                            <button 
                              type="button"
@@ -361,6 +489,9 @@ export default function Home() {
                          <input required type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-secondary/20 font-medium placeholder:text-outline-variant/60" placeholder="Your phone number" />
                        </div>
                      </div>
+                     <p className="rounded-xl bg-surface-container-low px-4 py-3 text-xs font-bold uppercase tracking-widest text-on-surface-variant">
+                       Admin schedule: {openTime} - {closeTime} | Break {breakStart} - {breakEnd}
+                     </p>
                      <button disabled={!selectedSlot || loading} type="submit" className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-lg py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-4 disabled:opacity-50">
                         {loading ? 'Booking...' : 'Confirm Booking'}
                      </button>
@@ -446,12 +577,86 @@ export default function Home() {
         </motion.main>
       ) : slotConfirmed ? (
         <motion.main key="confirmed" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="px-0 relative z-10 min-h-[70vh] flex flex-col items-center justify-center">
-            <div className="bg-[#e5f638] rounded-full w-24 h-24 flex items-center justify-center mb-8 shadow-sm">
-               <span className="material-symbols-outlined text-4xl text-[#545b00]">check_circle</span>
+            <div className="w-full max-w-xl px-4">
+              <div className="bg-white rounded-[2rem] shadow-[0_24px_48px_rgba(0,0,0,0.08)] overflow-hidden border border-[#545b00]/10">
+                <div className="bg-[#e5f638] px-8 py-8 text-center border-b border-[#545b00]/10">
+                  <div className="bg-[#f6ff8a] rounded-full w-20 h-20 flex items-center justify-center mx-auto mb-5 shadow-sm">
+                    <span className="material-symbols-outlined text-4xl text-[#545b00]">check_circle</span>
+                  </div>
+                  <h1 className="font-headline text-4xl md:text-5xl font-black text-[#545b00] mb-3">Slot Booked!</h1>
+                  <p className="text-[#545b00] font-bold uppercase tracking-[0.2em] text-xs">Keep this receipt and show it to the barber</p>
+                </div>
+
+                <div className="p-8 md:p-10">
+                  <div className="rounded-[1.5rem] border border-dashed border-outline-variant/30 bg-surface-container-low p-6 mb-8">
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Customer Name</p>
+                        <p className="font-headline text-2xl font-extrabold text-on-surface">{activeSlotBooking?.name}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Phone Number</p>
+                        <p className="font-bold text-lg text-on-surface">{activeSlotBooking?.phone}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Booking Time</p>
+                        <p className="font-headline text-3xl font-black text-[#004be2]">{activeSlotBooking?.slot}</p>
+                      </div>
+                      <div>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Booked On</p>
+                        <p className="font-bold text-lg text-on-surface">
+                          {activeSlotBooking?.createdAt
+                            ? new Date(activeSlotBooking.createdAt).toLocaleString([], {
+                                year: 'numeric',
+                                month: 'short',
+                                day: 'numeric',
+                                hour: '2-digit',
+                                minute: '2-digit',
+                              })
+                            : '-'}
+                        </p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="rounded-2xl bg-[#f8fcfd] border border-outline-variant/10 px-5 py-4 mb-8">
+                    <p className="text-sm font-medium text-on-surface-variant text-center">
+                      Please arrive a few minutes early and show this receipt to the barber when you reach the shop.
+                    </p>
+                  </div>
+
+                  <div className="rounded-[1.5rem] border border-outline-variant/10 bg-surface-container-lowest p-6 mb-8">
+                    <div className="flex flex-col items-center gap-4">
+                      <div className="bg-white p-4 rounded-2xl border border-outline-variant/10 shadow-sm">
+                        <div className="grid grid-cols-8 gap-1">
+                          {bookingQrPayload.split('').flatMap((char, charIndex) =>
+                            Array.from({ length: 2 }, (_, repeatIndex) => (
+                              <span
+                                key={`${charIndex}-${repeatIndex}`}
+                                className={`w-3 h-3 rounded-[2px] ${((char.charCodeAt(0) + repeatIndex + charIndex) % 2 === 0) ? 'bg-[#1f2937]' : 'bg-[#e5e7eb]'}`}
+                              />
+                            ))
+                          )}
+                        </div>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-on-surface-variant mb-2">Booking QR</p>
+                        <p className="font-mono text-xs text-on-surface break-all max-w-[260px]">{bookingQrPayload}</p>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col sm:flex-row gap-3">
+                    <button onClick={() => window.scrollTo({ top: 0, behavior: 'smooth' })} className="flex-1 bg-[#004be2] px-8 py-4 rounded-full font-bold shadow-sm text-white hover:bg-[#003ab4] transition-colors">
+                      Show to the barber
+                    </button>
+                    <button onClick={cancelSlotBooking} className="flex-1 bg-red-50 px-8 py-4 rounded-full font-bold shadow-sm text-red-600 border border-red-200 hover:bg-red-100 transition-colors">
+                      Quit Booking
+                    </button>
+                  </div>
+                </div>
+              </div>
             </div>
-            <h1 className="font-headline text-5xl font-black text-[#545b00] mb-4 text-center">Slot Booked!</h1>
-            <p className="text-lg text-on-surface-variant font-medium text-center mb-8">We'll see you at <strong className="text-on-surface text-2xl">{selectedSlot}</strong>.</p>
-            <button onClick={() => { setSlotConfirmed(false); setSelectedSlot(''); setName(''); setPhone(''); }} className="bg-white px-8 py-3 rounded-full font-bold shadow-sm text-[#004be2] border border-outline-variant/10 hover:bg-surface-container-low transition-colors">Done</button>
         </motion.main>
       ) : (
       

@@ -5,6 +5,17 @@ import { supabase } from '@/utils/supabase'
 import { Check, X, Power, Bell, Settings, Search, LayoutDashboard, Users, UserPlus, HelpCircle, LogOut } from 'lucide-react'
 import { motion, AnimatePresence } from 'framer-motion'
 
+type SlotBooking = {
+  id: string
+  name: string
+  phone: string
+  slot: string
+  createdAt: string
+}
+
+const SLOT_BOOKINGS_KEY = 'lot5_slot_bookings'
+const ACTIVE_SLOT_BOOKING_KEY = 'lot5_slot_booking'
+
 export default function AdminDashboard() {
   const [currentServing, setCurrentServing] = useState(0)
   const [queue, setQueue] = useState<any[]>([])
@@ -24,9 +35,59 @@ export default function AdminDashboard() {
   const [historicalQueue, setHistoricalQueue] = useState<any[]>([])
   const [crmMetrics, setCrmMetrics] = useState({ today: 0, week: 0, month: 0 })
   const [chartData, setChartData] = useState<any[]>([])
+  const [slotBookings, setSlotBookings] = useState<SlotBooking[]>([])
+
+  const applySettings = (settingsData?: any) => {
+      const readSetting = (field: string, storageKey: string, fallback: string | number) => {
+          if (settingsData && settingsData[field] !== undefined && settingsData[field] !== null) return settingsData[field]
+          if (typeof window !== 'undefined') {
+              const stored = localStorage.getItem(storageKey)
+              if (stored !== null) return stored
+          }
+          return fallback
+      }
+
+      setShopMode(String(readSetting('shop_mode', 'lot5_shop_mode', 'open')))
+      setBarbersCount(Number(readSetting('barbers_count', 'lot5_barbers_count', 2)) || 2)
+      setOpenTime(String(readSetting('open_time', 'lot5_open_time', '09:00')))
+      setCloseTime(String(readSetting('close_time', 'lot5_close_time', '19:00')))
+      setBreakStart(String(readSetting('break_start', 'lot5_break_start', '13:00')))
+      setBreakEnd(String(readSetting('break_end', 'lot5_break_end', '14:00')))
+  }
+
+  const loadSlotBookings = () => {
+      if (typeof window === 'undefined') return
+
+      try {
+          const storedBookings = localStorage.getItem(SLOT_BOOKINGS_KEY)
+          const parsedBookings = storedBookings ? JSON.parse(storedBookings) : []
+          setSlotBookings(Array.isArray(parsedBookings) ? parsedBookings : [])
+      } catch {
+          setSlotBookings([])
+      }
+  }
 
   useEffect(() => {
     fetchData()
+
+    const handleStorageChange = (e: StorageEvent) => {
+        const watchedKeys = new Set([
+          'lot5_queue_open',
+          'lot5_shop_mode',
+          'lot5_barbers_count',
+          'lot5_open_time',
+          'lot5_close_time',
+          'lot5_break_start',
+          'lot5_break_end',
+          SLOT_BOOKINGS_KEY,
+          ACTIVE_SLOT_BOOKING_KEY,
+        ])
+
+        if (e.key && watchedKeys.has(e.key)) fetchData()
+    }
+
+    window.addEventListener('storage', handleStorageChange)
+    return () => window.removeEventListener('storage', handleStorageChange)
   }, [])
 
   const calculateCRM = (data: any[]) => {
@@ -114,31 +175,18 @@ export default function AdminDashboard() {
   }
 
   const fetchData = async () => {
+    loadSlotBookings()
     try {
         const { data: settingsData, error } = await supabase.from('settings').select('*').limit(1).single()
         if (settingsData && !error) {
             setCurrentServing(settingsData.current_serving_number || 0)
             if (settingsData.is_accepting_bookings !== undefined) setIsQueueOpen(settingsData.is_accepting_bookings)
+            applySettings(settingsData)
         } else {
             const offlineState = localStorage.getItem('lot5_queue_open');
             if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
+            applySettings()
         }
-
-        // Load Settings
-        try {
-            const loadedMode = localStorage.getItem('lot5_shop_mode');
-            if (loadedMode) setShopMode(loadedMode);
-            const loadedBarbers = localStorage.getItem('lot5_barbers_count');
-            if (loadedBarbers) setBarbersCount(parseInt(loadedBarbers));
-            const oTime = localStorage.getItem('lot5_open_time');
-            if (oTime) setOpenTime(oTime);
-            const cTime = localStorage.getItem('lot5_close_time');
-            if (cTime) setCloseTime(cTime);
-            const bStart = localStorage.getItem('lot5_break_start');
-            if (bStart) setBreakStart(bStart);
-            const bEnd = localStorage.getItem('lot5_break_end');
-            if (bEnd) setBreakEnd(bEnd);
-        } catch(e) {}
 
         const { data: queueData } = await supabase
           .from('queue_entries')
@@ -158,6 +206,7 @@ export default function AdminDashboard() {
             generateMockCRM()
         }
     } catch(err) {
+        applySettings()
         if(queue.length === 0) {
             setCurrentServing(12)
             setQueue([
@@ -168,6 +217,8 @@ export default function AdminDashboard() {
             ])
             generateMockCRM()
         }
+    } finally {
+        loadSlotBookings()
     }
   }
 
@@ -184,7 +235,18 @@ export default function AdminDashboard() {
           const queueOpenState = shopMode === 'open' || shopMode === 'queue';
           setIsQueueOpen(queueOpenState);
           localStorage.setItem('lot5_queue_open', String(queueOpenState));
-          try { await supabase.from('settings').upsert({ id: 1, is_accepting_bookings: queueOpenState }) } catch(e) {}
+          try {
+            await supabase.from('settings').upsert({
+              id: 1,
+              is_accepting_bookings: queueOpenState,
+              shop_mode: shopMode,
+              barbers_count: barbersCount,
+              open_time: openTime,
+              close_time: closeTime,
+              break_start: breakStart,
+              break_end: breakEnd,
+            })
+          } catch(e) {}
           
           alert("Settings saved successfully!")
       } catch (e) {
@@ -198,6 +260,25 @@ export default function AdminDashboard() {
       if (typeof window !== 'undefined') localStorage.setItem('lot5_queue_open', String(newState));
       try { await supabase.from('settings').upsert({ id: 1, is_accepting_bookings: newState }) } 
       catch (err) { console.error('Offline toggle', err) }
+  }
+
+  const removeSlotBooking = (bookingId: string) => {
+    const nextBookings = slotBookings.filter((booking) => booking.id !== bookingId)
+    setSlotBookings(nextBookings)
+
+    if (typeof window !== 'undefined') {
+      localStorage.setItem(SLOT_BOOKINGS_KEY, JSON.stringify(nextBookings))
+
+      const activeBooking = localStorage.getItem(ACTIVE_SLOT_BOOKING_KEY)
+      if (activeBooking) {
+        try {
+          const parsedBooking = JSON.parse(activeBooking)
+          if (parsedBooking?.id === bookingId) localStorage.removeItem(ACTIVE_SLOT_BOOKING_KEY)
+        } catch {
+          localStorage.removeItem(ACTIVE_SLOT_BOOKING_KEY)
+        }
+      }
+    }
   }
 
   const downloadCSV = () => {
@@ -344,7 +425,7 @@ export default function AdminDashboard() {
           <div className="md:col-span-2 bg-[#ffffe6] p-8 rounded-[2rem] relative overflow-hidden flex flex-col justify-center border border-[#e5f638]/20 shadow-sm">
             <div className="relative z-10">
               <h1 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface mb-2">Morning, Lot 5.</h1>
-              <p className="text-on-surface-variant font-medium">There are currently {queue.length} customers waiting in the queue.</p>
+              <p className="text-on-surface-variant font-medium">There are currently {queue.length} customers waiting in the queue and {slotBookings.length} slot bookings reserved.</p>
             </div>
             {/* Artistic Overlay */}
             <div className="absolute right-0 top-0 w-1/3 h-full bg-gradient-to-l from-[#e5f638]/40 to-transparent pointer-events-none"></div>
@@ -463,6 +544,38 @@ export default function AdminDashboard() {
           </div>
           <div className="px-8 py-4 bg-surface/50 border-t border-outline-variant/5 text-center">
              <button className="text-[#004be2] font-bold text-sm hover:underline decoration-2 underline-offset-4 transition-all">View All Entries</button>
+          </div>
+        </section>
+
+        <section className="mt-12 bg-white rounded-3xl overflow-hidden shadow-sm border border-outline-variant/10">
+          <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-white border-b border-outline-variant/5 gap-4">
+            <div>
+              <h2 className="font-headline font-bold text-2xl text-on-surface">Slot Bookings</h2>
+              <p className="text-sm text-on-surface-variant font-medium">These bookings follow the hours configured in the management tab.</p>
+            </div>
+            <span className="px-3 py-1 bg-[#e5f638] text-[#545b00] text-xs font-bold rounded-full uppercase tracking-widest">{slotBookings.length} Active</span>
+          </div>
+
+          <div className="divide-y divide-outline-variant/5">
+            {slotBookings.length === 0 ? (
+              <div className="px-8 py-16 text-center text-on-surface-variant font-medium">No active slot bookings yet.</div>
+            ) : (
+              slotBookings
+                .slice()
+                .sort((a, b) => a.slot.localeCompare(b.slot))
+                .map((booking) => (
+                  <div key={booking.id} className="px-8 py-5 flex flex-col md:flex-row md:items-center md:justify-between gap-4 hover:bg-surface transition-colors">
+                    <div>
+                      <p className="font-bold text-on-surface">{booking.name}</p>
+                      <p className="text-sm text-on-surface-variant">{booking.phone || 'No phone provided'}</p>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <span className="px-4 py-2 rounded-full bg-[#c5d0ff] text-[#004be2] text-sm font-bold">{booking.slot}</span>
+                      <button onClick={() => removeSlotBooking(booking.id)} className="px-4 py-2 rounded-full border border-red-200 text-red-600 font-bold text-sm hover:bg-red-50 transition-colors">Cancel Slot</button>
+                    </div>
+                  </div>
+                ))
+            )}
           </div>
         </section>
 
