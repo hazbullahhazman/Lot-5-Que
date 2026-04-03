@@ -17,6 +17,15 @@ export default function Home() {
   const [myTicketStatus, setMyTicketStatus] = useState<string>('WAITING')
   const [isQueueOpen, setIsQueueOpen] = useState(true)
 
+  // SLOT BOOKING STATE
+  const [activeView, setActiveView] = useState<'queue' | 'slot'>('queue')
+  const [shopMode, setShopMode] = useState('open')
+  const [barbersCount, setBarbersCount] = useState(2)
+  const [openTime, setOpenTime] = useState('09:00')
+  const [closeTime, setCloseTime] = useState('19:00')
+  const [breakStart, setBreakStart] = useState('13:00')
+  const [breakEnd, setBreakEnd] = useState('14:00')
+
   useEffect(() => {
     // 🔥 NEW: Instant LocalStorage Restore
     if (typeof window !== 'undefined') {
@@ -82,6 +91,25 @@ export default function Home() {
             const offlineState = localStorage.getItem('lot5_queue_open');
             if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
         }
+
+        // NEW: Load Local Settings
+        try {
+            const loadedMode = localStorage.getItem('lot5_shop_mode');
+            if (loadedMode) {
+               setShopMode(loadedMode);
+               if (loadedMode === 'slot') setActiveView('slot');
+            }
+            const loadedBarbers = localStorage.getItem('lot5_barbers_count');
+            if (loadedBarbers) setBarbersCount(parseInt(loadedBarbers));
+            const oTime = localStorage.getItem('lot5_open_time');
+            if (oTime) setOpenTime(oTime);
+            const cTime = localStorage.getItem('lot5_close_time');
+            if (cTime) setCloseTime(cTime);
+            const bStart = localStorage.getItem('lot5_break_start');
+            if (bStart) setBreakStart(bStart);
+            const bEnd = localStorage.getItem('lot5_break_end');
+            if (bEnd) setBreakEnd(bEnd);
+        } catch(e) {}
 
         const { data: queueData } = await supabase
           .from('queue_entries')
@@ -201,12 +229,48 @@ export default function Home() {
   // Calculate position logic for the dashboard view
   const myQueueIndex = queue.findIndex(q => q.queue_number === joinedTicket);
   const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
-  // If myQueueIndex is 0, they are next. If it's -1, they probably aren't in queue array (error or served). 
+  
+  // Dynamic Wait Math
+  const waitTimeMins = Math.ceil((queue.length * 30) / Math.max(1, barbersCount));
+  const myWaitTimeMins = Math.ceil((peopleAhead * 30) / Math.max(1, barbersCount));
+  
   let positionDisplay = peopleAhead + 1; 
   let positionSuffix = "TH";
   if (positionDisplay === 1) positionSuffix = "ST";
   else if (positionDisplay === 2) positionSuffix = "ND";
   else if (positionDisplay === 3) positionSuffix = "RD";
+
+  // Slot generation logic
+  const generateSlots = () => {
+    const slots = [];
+    try {
+        let current = new Date(`2000-01-01T${openTime}:00`);
+        const end = new Date(`2000-01-01T${closeTime}:00`);
+        const bStart = new Date(`2000-01-01T${breakStart}:00`);
+        const bEnd = new Date(`2000-01-01T${breakEnd}:00`);
+
+        while (current < end) {
+          if (current >= bStart && current < bEnd) {
+            current.setMinutes(current.getMinutes() + 30);
+            continue;
+          }
+          slots.push(current.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }));
+          current.setMinutes(current.getMinutes() + 30);
+        }
+    } catch(e) {}
+    return slots;
+  };
+  const [selectedSlot, setSelectedSlot] = useState('');
+  const [slotConfirmed, setSlotConfirmed] = useState(false);
+  
+  const bookSlot = (e: React.FormEvent) => {
+      e.preventDefault();
+      setLoading(true);
+      setTimeout(() => {
+          setLoading(false);
+          setSlotConfirmed(true);
+      }, 1000);
+  }
 
   return (
     <div className={`min-h-screen text-on-surface font-body selection:bg-primary-container selection:text-on-primary-container ${!joinedTicket ? 'flex flex-col bg-surface spotlight-gradient' : 'bg-[#f8fcfd] spotlight-bg'}`}>
@@ -229,8 +293,18 @@ export default function Home() {
         
         {/* TOP SCREEN: Dynamic Dashboard/Form */}
         <div className="w-full relative min-h-[90vh] flex flex-col justify-center max-w-[1000px] mx-auto pt-16 lg:pt-24 pb-16 px-4 md:px-8">
+          
+          {!joinedTicket && !slotConfirmed && shopMode === 'open' && (
+             <div className="flex justify-center mb-8 relative z-20">
+               <div className="bg-surface-container-high p-1 rounded-full flex gap-1 shadow-sm border border-outline-variant/10">
+                 <button onClick={() => setActiveView('queue')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${activeView === 'queue' ? 'bg-[#c5d0ff] text-[#004be2] shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>Walk-in Queue</button>
+                 <button onClick={() => setActiveView('slot')} className={`px-6 py-2 rounded-full font-bold text-sm transition-all ${activeView === 'slot' ? 'bg-[#c5d0ff] text-[#004be2] shadow-sm' : 'text-on-surface-variant hover:text-on-surface'}`}>Book a Slot</button>
+               </div>
+             </div>
+          )}
+
           <AnimatePresence mode="wait">
-      {!joinedTicket ? (
+      {!joinedTicket && !slotConfirmed ? (
         <motion.main 
            key="join"
            initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} exit={{ opacity: 0, y: -20, filter: "blur(10px)" }}
@@ -241,7 +315,59 @@ export default function Home() {
           <div className="absolute bottom-0 -left-24 w-80 h-80 bg-secondary/10 rounded-full blur-3xl mix-blend-multiply pointer-events-none"></div>
 
           <div className="w-full max-w-lg relative z-10">
-            {isQueueOpen ? (
+            {shopMode === 'closed' ? (
+               <div className="bg-red-50 rounded-[2rem] shadow-xl overflow-hidden border-2 border-red-500/20 text-center p-12 relative animate-in zoom-in duration-500">
+                 <div className="absolute top-0 left-0 w-full h-2 bg-red-500"></div>
+                 <div className="w-24 h-24 bg-red-100 rounded-full mx-auto flex items-center justify-center mb-6">
+                    <span className="material-symbols-outlined text-5xl text-red-600 font-black">block</span>
+                 </div>
+                 <h1 className="font-headline text-4xl font-extrabold tracking-tight text-red-600 mb-4">Shop Closed</h1>
+                 <p className="text-red-900/80 font-medium leading-relaxed mb-8 text-lg">We&apos;re currently closed. Please check back later.</p>
+               </div>
+            ) : activeView === 'slot' ? (
+            <>
+               <div className="text-center mb-10">
+                 <span className="text-3xl font-black tracking-tighter text-primary block mb-2 font-headline">Book a Slot</span>
+                 <div className="h-1 w-12 bg-secondary mx-auto rounded-full"></div>
+               </div>
+
+               <div className="bg-surface-container-lowest rounded-xl shadow-[0_24px_48px_rgba(0,0,0,0.06)] overflow-hidden border border-outline-variant/10 p-8 md:p-12 text-left">
+                   <h2 className="font-headline font-bold text-xl mb-4">Select a Time</h2>
+                   <div className="grid grid-cols-3 gap-3 mb-8">
+                       {generateSlots().map(slot => (
+                           <button 
+                             type="button"
+                             key={slot} 
+                             onClick={() => setSelectedSlot(slot)}
+                             className={`py-3 rounded-lg font-bold text-sm transition-all border-2 ${selectedSlot === slot ? 'border-[#004be2] bg-[#c5d0ff] text-[#004be2]' : 'border-outline-variant/10 hover:border-outline-variant/30 text-on-surface'}`}
+                           >
+                             {slot}
+                           </button>
+                       ))}
+                   </div>
+
+                   <form onSubmit={bookSlot} className="space-y-6">
+                     <div className="space-y-2">
+                       <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Name</label>
+                       <div className="relative">
+                         <User className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5" />
+                         <input required type="text" value={name} onChange={e => setName(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-secondary/20 font-medium placeholder:text-outline-variant/60" placeholder="Your name" />
+                       </div>
+                     </div>
+                     <div className="space-y-2">
+                       <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant ml-1">Phone</label>
+                       <div className="relative">
+                         <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5" />
+                         <input required type="tel" value={phone} onChange={e => setPhone(e.target.value)} className="w-full pl-12 pr-4 py-4 bg-surface-container-low border-none rounded-xl focus:ring-2 focus:ring-secondary/20 font-medium placeholder:text-outline-variant/60" placeholder="Your phone number" />
+                       </div>
+                     </div>
+                     <button disabled={!selectedSlot || loading} type="submit" className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-lg py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all duration-200 mt-4 disabled:opacity-50">
+                        {loading ? 'Booking...' : 'Confirm Booking'}
+                     </button>
+                   </form>
+               </div>
+            </>
+            ) : isQueueOpen ? (
             <>
             <div className="text-center mb-10">
               <span className="text-3xl font-black tracking-tighter text-primary block mb-2 font-headline">Lot 5 Barbershop</span>
@@ -292,7 +418,7 @@ export default function Home() {
                 <div className="mt-10 pt-8 border-t border-outline-variant/10 flex items-center justify-between text-xs font-bold uppercase tracking-widest text-outline">
                   <div className="flex items-center gap-2">
                     <span className="w-2 h-2 rounded-full bg-secondary animate-pulse"></span>
-                    <span>Current Wait: {queue.length > 0 ? queue.length * 20 : 0} Mins</span>
+                    <span>Current Wait: {queue.length > 0 ? waitTimeMins : 0} Mins</span>
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="material-symbols-outlined text-sm" style={{ fontVariationSettings: "'FILL' 1" }}>event_seat</span>
@@ -317,6 +443,15 @@ export default function Home() {
                 <a href="#" className="text-xs font-bold text-on-surface-variant hover:text-secondary transition-colors uppercase tracking-widest flex items-center gap-1">Policy</a>
             </div>
           </div>
+        </motion.main>
+      ) : slotConfirmed ? (
+        <motion.main key="confirmed" initial={{ opacity: 0, y: 30 }} animate={{ opacity: 1, y: 0 }} className="px-0 relative z-10 min-h-[70vh] flex flex-col items-center justify-center">
+            <div className="bg-[#e5f638] rounded-full w-24 h-24 flex items-center justify-center mb-8 shadow-sm">
+               <span className="material-symbols-outlined text-4xl text-[#545b00]">check_circle</span>
+            </div>
+            <h1 className="font-headline text-5xl font-black text-[#545b00] mb-4 text-center">Slot Booked!</h1>
+            <p className="text-lg text-on-surface-variant font-medium text-center mb-8">We'll see you at <strong className="text-on-surface text-2xl">{selectedSlot}</strong>.</p>
+            <button onClick={() => { setSlotConfirmed(false); setSelectedSlot(''); setName(''); setPhone(''); }} className="bg-white px-8 py-3 rounded-full font-bold shadow-sm text-[#004be2] border border-outline-variant/10 hover:bg-surface-container-low transition-colors">Done</button>
         </motion.main>
       ) : (
       
@@ -360,7 +495,7 @@ export default function Home() {
             <div className="bg-[#e5f638] rounded-[2rem] p-8 flex flex-col items-center justify-center text-center shadow-sm border border-[#545b00]/10 transition-all hover:shadow-md relative overflow-hidden">
               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-4">Estimated Wait</span>
               <div className="flex items-baseline gap-2 relative z-10">
-                <span className="font-headline text-7xl font-black text-[#545b00] tracking-tighter leading-none">{peopleAhead * 20}</span>
+                <span className="font-headline text-7xl font-black text-[#545b00] tracking-tighter leading-none">{myWaitTimeMins}</span>
                 <span className="font-headline text-2xl font-bold text-[#545b00]">MIN</span>
               </div>
               <div className="mt-4 flex items-center gap-2 bg-black/5 px-4 py-1.5 rounded-full relative z-10">

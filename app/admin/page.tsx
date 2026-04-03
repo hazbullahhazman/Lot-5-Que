@@ -9,7 +9,16 @@ export default function AdminDashboard() {
   const [currentServing, setCurrentServing] = useState(0)
   const [queue, setQueue] = useState<any[]>([])
   const [isQueueOpen, setIsQueueOpen] = useState(true)
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management'>('overview')
+
+  // Management Settings
+  const [shopMode, setShopMode] = useState('open') // 'open', 'slot', 'queue', 'closed'
+  const [barbersCount, setBarbersCount] = useState(2)
+  const [openTime, setOpenTime] = useState('09:00')
+  const [closeTime, setCloseTime] = useState('19:00')
+  const [breakStart, setBreakStart] = useState('13:00')
+  const [breakEnd, setBreakEnd] = useState('14:00')
+  const [isSaving, setIsSaving] = useState(false)
 
   // Dynamic CRM Data
   const [historicalQueue, setHistoricalQueue] = useState<any[]>([])
@@ -115,6 +124,22 @@ export default function AdminDashboard() {
             if (offlineState !== null) setIsQueueOpen(offlineState === 'true');
         }
 
+        // Load Settings
+        try {
+            const loadedMode = localStorage.getItem('lot5_shop_mode');
+            if (loadedMode) setShopMode(loadedMode);
+            const loadedBarbers = localStorage.getItem('lot5_barbers_count');
+            if (loadedBarbers) setBarbersCount(parseInt(loadedBarbers));
+            const oTime = localStorage.getItem('lot5_open_time');
+            if (oTime) setOpenTime(oTime);
+            const cTime = localStorage.getItem('lot5_close_time');
+            if (cTime) setCloseTime(cTime);
+            const bStart = localStorage.getItem('lot5_break_start');
+            if (bStart) setBreakStart(bStart);
+            const bEnd = localStorage.getItem('lot5_break_end');
+            if (bEnd) setBreakEnd(bEnd);
+        } catch(e) {}
+
         const { data: queueData } = await supabase
           .from('queue_entries')
           .select('*')
@@ -122,12 +147,12 @@ export default function AdminDashboard() {
           .order('queue_number', { ascending: true })
         if (queueData) setQueue(queueData)
 
-        const { data: allData, error } = await supabase
+        const { data: allData, error: allDataError } = await supabase
           .from('queue_entries')
           .select('*')
           .order('created_at', { ascending: false })
           
-        if (allData && !error) {
+        if (allData && !allDataError) {
             calculateCRM(allData)
         } else {
             generateMockCRM()
@@ -144,6 +169,27 @@ export default function AdminDashboard() {
             generateMockCRM()
         }
     }
+  }
+
+  const saveSettings = async () => {
+      setIsSaving(true);
+      try {
+          localStorage.setItem('lot5_shop_mode', shopMode)
+          localStorage.setItem('lot5_barbers_count', barbersCount.toString())
+          localStorage.setItem('lot5_open_time', openTime)
+          localStorage.setItem('lot5_close_time', closeTime)
+          localStorage.setItem('lot5_break_start', breakStart)
+          localStorage.setItem('lot5_break_end', breakEnd)
+          
+          const queueOpenState = shopMode === 'open' || shopMode === 'queue';
+          setIsQueueOpen(queueOpenState);
+          localStorage.setItem('lot5_queue_open', String(queueOpenState));
+          try { await supabase.from('settings').upsert({ id: 1, is_accepting_bookings: queueOpenState }) } catch(e) {}
+          
+          alert("Settings saved successfully!")
+      } catch (e) {
+          console.error(e)
+      } finally { setIsSaving(false) }
   }
 
   const toggleQueue = async () => {
@@ -272,8 +318,8 @@ export default function AdminDashboard() {
             <Users className={`w-5 h-5 ${activeTab === 'customers' ? 'text-[#004be2]' : ''}`} />
             <span className="font-headline font-semibold tracking-tight">Customers</span>
           </button>
-          <button className="w-full flex items-center gap-3 text-gray-500 px-4 py-3 hover:translate-x-1 transition-transform">
-            <span className="material-symbols-outlined text-xl">settings_applications</span>
+          <button onClick={() => setActiveTab('management')} className={`w-full flex items-center gap-3 rounded-lg px-4 py-3 transition-all ${activeTab === 'management' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm' : 'text-gray-500 hover:bg-surface hover:translate-x-1'}`}>
+            <span className={`material-symbols-outlined text-xl ${activeTab === 'management' ? 'text-[#004be2]' : ''}`}>settings_applications</span>
             <span className="font-headline font-semibold tracking-tight">Management</span>
           </button>
         </nav>
@@ -306,7 +352,7 @@ export default function AdminDashboard() {
           
           <div className="bg-[#e5f638] p-6 rounded-[2rem] flex flex-col items-center justify-center text-center shadow-sm">
             <p className="text-[#545b00] font-headline font-bold text-xs uppercase tracking-widest mb-1">Avg. Wait Time</p>
-            <div className="text-6xl font-black font-headline text-[#545b00]">24</div>
+            <div className="text-6xl font-black font-headline text-[#545b00]">{Math.ceil((queue.length * 30)/Math.max(1, barbersCount))}</div>
             <p className="text-[#545b00]/80 text-sm font-bold">Minutes</p>
           </div>
 
@@ -372,7 +418,7 @@ export default function AdminDashboard() {
                       </td>
                       <td className="px-8 py-6">
                         <div className={`px-4 py-2 text-sm font-bold rounded-full inline-flex items-center gap-1 ${i === 0 ? 'bg-[#e5f638] text-[#545b00]' : 'bg-surface-container-low text-on-surface'}`}>
-                           <span>{(i + 1) * 15 - 10}</span>
+                           <span>{Math.ceil((i * 30)/Math.max(1, barbersCount))}</span>
                            <span className="text-[10px] uppercase">Min</span>
                         </div>
                       </td>
@@ -591,6 +637,82 @@ export default function AdminDashboard() {
             </div>
           </section>
 
+        </div>
+        ) : (
+        /* -- MANAGEMENT VIEW -- */
+        <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-4xl">
+          <div className="mb-8 flex justify-between items-end">
+            <div>
+              <h1 className="text-4xl font-extrabold font-headline tracking-tighter text-on-surface mb-2">Shop Management</h1>
+              <p className="text-on-surface-variant font-medium">Configure queue rules, operating hours, and booking access.</p>
+            </div>
+            <button onClick={saveSettings} disabled={isSaving} className="bg-[#004be2] text-white px-8 py-3 rounded-full font-bold shadow-md hover:shadow-lg transition-all active:scale-95 disabled:opacity-50">
+              {isSaving ? 'Saving...' : 'Save Changes'}
+            </button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+            {/* Shop Mode */}
+            <section className="bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10 md:col-span-2">
+              <h3 className="font-headline font-bold text-xl mb-6 text-on-surface">Operations Mode</h3>
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+                {[
+                  { id: 'open', label: 'Both Open', desc: 'Queue & Slots Active', color: 'bg-[#e5f638] text-[#545b00]' },
+                  { id: 'slot', label: 'Slot Only', desc: 'No Walk-in Queue', color: 'bg-[#c5d0ff] text-[#004be2]' },
+                  { id: 'queue', label: 'Queue Only', desc: 'No Adv. Booking', color: 'bg-green-100 text-green-800' },
+                  { id: 'closed', label: 'Closed', desc: 'Not accepting any', color: 'bg-red-100 text-red-800' }
+                ].map(mode => (
+                  <div key={mode.id} onClick={() => setShopMode(mode.id)} className={`p-4 rounded-2xl cursor-pointer border-2 transition-all ${shopMode === mode.id ? 'border-[#004be2] shadow-sm bg-surface' : 'border-outline-variant/10 hover:border-outline-variant/30'}`}>
+                    <div className={`w-10 h-10 rounded-full flex items-center justify-center mb-3 ${shopMode === mode.id ? mode.color : 'bg-surface-container-high text-on-surface-variant'}`}>
+                       <span className="material-symbols-outlined">{shopMode === mode.id ? 'check' : 'radio_button_unchecked'}</span>
+                    </div>
+                    <p className="font-bold font-headline text-on-surface">{mode.label}</p>
+                    <p className="text-[10px] uppercase font-bold text-on-surface-variant tracking-wider mt-1">{mode.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </section>
+
+            {/* Operating Hours */}
+            <section className="bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
+              <h3 className="font-headline font-bold text-xl mb-6 text-on-surface">Operating Hours</h3>
+              <div className="space-y-4">
+                 <div>
+                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">Open Time</label>
+                   <input type="time" value={openTime} onChange={e => setOpenTime(e.target.value)} className="w-full bg-surface-container-low border-none rounded-xl p-4 font-bold text-on-surface focus:ring-2 focus:ring-[#004be2]/30" />
+                 </div>
+                 <div>
+                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">Close Time</label>
+                   <input type="time" value={closeTime} onChange={e => setCloseTime(e.target.value)} className="w-full bg-surface-container-low border-none rounded-xl p-4 font-bold text-on-surface focus:ring-2 focus:ring-[#004be2]/30" />
+                 </div>
+              </div>
+            </section>
+
+            {/* Break & Capacity */}
+            <section className="bg-white rounded-[2rem] p-8 shadow-sm border border-outline-variant/10">
+              <h3 className="font-headline font-bold text-xl mb-6 text-on-surface">Capacity & Breaks</h3>
+              <div className="space-y-4">
+                 <div>
+                   <label className="block text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2">Active Barbers Today</label>
+                   <div className="flex items-center gap-4 bg-surface-container-low rounded-xl p-2">
+                      <button onClick={() => setBarbersCount(Math.max(1, barbersCount - 1))} className="w-12 h-12 rounded-lg bg-white flex items-center justify-center font-bold text-lg hover:bg-surface-container-high transition-colors">-</button>
+                      <div className="flex-1 text-center font-headline font-black text-2xl text-[#004be2]">{barbersCount}</div>
+                      <button onClick={() => setBarbersCount(Math.min(10, barbersCount + 1))} className="w-12 h-12 rounded-lg bg-white flex items-center justify-center font-bold text-lg hover:bg-surface-container-high transition-colors">+</button>
+                   </div>
+                 </div>
+                 <div className="grid grid-cols-2 gap-4">
+                   <div>
+                     <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Break Start</label>
+                     <input type="time" value={breakStart} onChange={e => setBreakStart(e.target.value)} className="w-full bg-surface-container-low border-none rounded-xl p-3 font-bold text-on-surface text-sm focus:ring-2 focus:ring-[#004be2]/30" />
+                   </div>
+                   <div>
+                     <label className="block text-[10px] font-bold uppercase tracking-widest text-on-surface-variant mb-2">Break End</label>
+                     <input type="time" value={breakEnd} onChange={e => setBreakEnd(e.target.value)} className="w-full bg-surface-container-low border-none rounded-xl p-3 font-bold text-on-surface text-sm focus:ring-2 focus:ring-[#004be2]/30" />
+                   </div>
+                 </div>
+              </div>
+            </section>
+          </div>
         </div>
         )}
       </main>
