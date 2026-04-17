@@ -155,6 +155,10 @@ export default function UserDashboard() {
          status: 'WAITING'
      }]).select().single()
 
+     if (error) {
+         alert("Failed to join queue: " + error.message)
+         console.error(error)
+     }
      if (!error && data) {
          setMyTicket(data)
          fetchInitialData() // refresh activeQueue
@@ -189,7 +193,7 @@ export default function UserDashboard() {
      }
      
      // Live mode - normally insert to Supabase here
-     await supabase().from('queue_entries').insert([{
+     const { error } = await supabase().from('queue_entries').insert([{
          user_id: profile?.id,
          customer_name: profile?.name,
          phone_number: profile?.phone,
@@ -197,7 +201,12 @@ export default function UserDashboard() {
          status: 'WAITING',
          booked_time: selectedSlot
      }])
-     alert("Booking submitted for " + selectedSlot)
+     if (error) {
+         alert("Booking failed: " + error.message)
+     } else {
+         alert("Booking submitted for " + selectedSlot)
+         fetchSessionAndData() // Refresh everything
+     }
   }
 
   const generateSlots = () => {
