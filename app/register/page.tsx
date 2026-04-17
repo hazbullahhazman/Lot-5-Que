@@ -85,12 +85,12 @@ function RegisterForm() {
 
         <div className="bg-white rounded-3xl shadow-[0_32px_64px_rgba(0,0,0,0.06)] overflow-hidden border border-[#545b00]/10 p-8 md:p-10 backdrop-blur-md">
           {success ? (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-8">
+             <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} className="text-center py-8">
                <div className="w-20 h-20 bg-[#e5f638] rounded-full flex items-center justify-center text-[#545b00] mx-auto mb-6 shadow-sm border border-[#545b00]/10">
                   <span className="material-symbols-outlined text-4xl">check_circle</span>
                </div>
-               <h3 className="font-headline text-2xl font-black text-[#545b00] mb-2">You&apos;re Set!</h3>
-               <p className="text-on-surface-variant font-medium mb-8">Your account has been created successfully. You can now login to join the queue.</p>
+               <h3 className="font-headline text-2xl font-black text-[#545b00] mb-2">Check Your Email!</h3>
+               <p className="text-on-surface-variant font-medium mb-8">We have sent a verification link to your email. Click it to activate your account and join the queue.</p>
                <a href="/login" className="w-full inline-block bg-[#004be2] text-white font-headline font-extrabold text-lg py-4 rounded-full shadow-lg shadow-[#004be2]/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
                   Go to Login
                </a>

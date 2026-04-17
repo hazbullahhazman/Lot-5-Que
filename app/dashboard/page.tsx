@@ -113,7 +113,7 @@ export default function UserDashboard() {
          .select('*')
          .eq('user_id', uid)
          .in('status', ['WAITING', 'CALLED'])
-         .order('created_at', { ascending: false })
+         .order('joined_at', { ascending: false })
          .limit(1)
          .single()
       
@@ -126,7 +126,7 @@ export default function UserDashboard() {
          .select('*')
          .eq('user_id', uid)
          .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
-         .order('created_at', { ascending: false })
+         .order('joined_at', { ascending: false })
          .limit(10)
       if (hist) setMyHistory(hist)
 

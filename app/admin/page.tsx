@@ -99,7 +99,7 @@ export default function AdminDashboard() {
          // Active Queue List mapping to User profiles
          const { data: qData } = await supabase()
             .from('queue_entries')
-            .select('id, queue_number, status, user_id, customer_name, phone_number, created_at, profiles(name, email)')
+            .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, profiles(name, email)')
             .in('status', ['WAITING', 'CALLED'])
             .order('queue_number', { ascending: true })
          if (qData) setActiveQueue(qData)
@@ -107,9 +107,9 @@ export default function AdminDashboard() {
          // Historical Data for CRM
          const { data: hData } = await supabase()
             .from('queue_entries')
-            .select('id, queue_number, status, created_at, customer_name, profiles(name, email)')
+            .select('id, queue_number, status, joined_at, customer_name, profiles(name, email)')
             .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
-            .order('created_at', { ascending: false })
+            .order('joined_at', { ascending: false })
             .limit(100)
          if (hData) {
              setHistory(hData)
@@ -117,7 +117,7 @@ export default function AdminDashboard() {
              const now = new Date()
              let today = 0, week = 0, absent = 0
              hData.forEach(h => {
-                const d = new Date(h.created_at)
+                const d = new Date(h.joined_at)
                 const diffDays = Math.ceil(Math.abs(now.getTime() - d.getTime()) / (1000 * 60 * 60 * 24))
                 if (diffDays <= 1 && h.status === 'COMPLETED') today++
                 if (diffDays <= 7 && h.status === 'COMPLETED') week++
