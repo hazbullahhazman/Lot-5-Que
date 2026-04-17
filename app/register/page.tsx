@@ -10,6 +10,7 @@ function RegisterForm() {
   const searchParams = useSearchParams()
   const [name, setName] = useState('')
   const [email, setEmail] = useState('')
+  const [countryCode, setCountryCode] = useState('+60')
   const [phone, setPhone] = useState('')
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
@@ -38,13 +39,14 @@ function RegisterForm() {
 
     try {
       const db = supabase()
+      const fullPhone = `${countryCode}${phone.replace(/^0+/, '')}` // strip leading 0 if they type '011' after '+60'
       const { error } = await db.auth.signUp({
         email,
         password,
         options: {
           data: {
             name,
-            phone,
+            phone: fullPhone,
             role: 'user',
             referral_code: referralCode || undefined
           }
@@ -129,12 +131,21 @@ function RegisterForm() {
 
                 <div className="space-y-2">
                   <label className="block text-xs font-bold uppercase tracking-widest text-[#545b00]/70 ml-1">Phone Number</label>
-                  <div className="relative">
-                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5" />
+                  <div className="flex relative">
+                    <Phone className="absolute left-4 top-1/2 -translate-y-1/2 text-outline-variant w-5 h-5 z-10" />
+                    <select 
+                       value={countryCode} onChange={e => setCountryCode(e.target.value)}
+                       className="pl-12 pr-2 py-4 bg-surface-container-lowest border-2 border-r-0 border-outline-variant/10 rounded-l-xl focus:border-[#004be2] transition-all font-bold text-on-surface outline-none appearance-none cursor-pointer"
+                    >
+                       <option value="+60">🇲🇾 +60</option>
+                       <option value="+65">🇸🇬 +65</option>
+                       <option value="+62">🇮🇩 +62</option>
+                       <option value="+66">🇹🇭 +66</option>
+                    </select>
                     <input 
-                      required type="tel" value={phone} onChange={e => setPhone(e.target.value)}
-                      className="w-full pl-12 pr-4 py-4 bg-surface-container-lowest border-2 border-outline-variant/10 rounded-xl focus:border-[#004be2] focus:ring-4 focus:ring-[#004be2]/10 transition-all duration-200 font-medium placeholder:text-outline-variant/60 outline-none" 
-                      placeholder="+60 12-345-6789" 
+                      required type="tel" value={phone} onChange={e => setPhone(e.target.value.replace(/\D/g,''))}
+                      className="w-full px-4 py-4 bg-surface-container-lowest border-2 border-outline-variant/10 rounded-r-xl focus:border-[#004be2] focus:ring-4 focus:ring-[#004be2]/10 transition-all duration-200 font-medium placeholder:text-outline-variant/60 outline-none" 
+                      placeholder="12-345-6789" 
                     />
                   </div>
                 </div>

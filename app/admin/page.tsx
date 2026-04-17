@@ -9,11 +9,12 @@ export default function AdminDashboard() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management'>('management')
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management' | 'users'>('management')
   
   // Data
   const [activeQueue, setActiveQueue] = useState<any[]>([])
   const [history, setHistory] = useState<any[]>([])
+  const [usersList, setUsersList] = useState<any[]>([])
   const [metrics, setMetrics] = useState({ todayCuts: 0, todaySales: 0, weeklyCuts: 0, churnRisk: 0, absences: 0 })
 
   // Shop Management Configuration
@@ -78,11 +79,15 @@ export default function AdminDashboard() {
 
   const loadMockData = () => {
       setActiveQueue([
-          { id: 'q1', queue_number: 14, status: 'WAITING', profiles: { name: 'Julian D.', email: 'julian@lot5.com', phone: '60123456789' } },
-          { id: 'q2', queue_number: 15, status: 'WAITING', profiles: { name: 'Marcus K.', email: 'marcus@lot5.com', phone: '60198765432' } },
+          { id: 'q1', queue_number: 14, status: 'WAITING', customer_name: 'Julian D.', phone_number: '60123456789' },
+          { id: 'q2', queue_number: 15, status: 'WAITING', customer_name: 'Marcus K.', phone_number: '60198765432' },
       ])
       setHistory([
-          { id: 'h1', status: 'COMPLETED', created_at: new Date().toISOString(), profiles: { name: 'John Doe', email: 'john@lot5.com' } }
+          { id: 'h1', status: 'COMPLETED', created_at: new Date().toISOString(), customer_name: 'John Doe' }
+      ])
+      setUsersList([
+          { id: '1', name: 'Julian D.', email: 'julian@lot5.com', role: 'admin', created_at: new Date().toISOString() },
+          { id: '2', name: 'Marcus K.', email: 'marcus@lot5.com', role: 'user', created_at: new Date().toISOString() }
       ])
       setMetrics({ todayCuts: 12, todaySales: 360, weeklyCuts: 84, churnRisk: 5, absences: 2 })
   }
@@ -93,16 +98,16 @@ export default function AdminDashboard() {
      try {
          // Active Queue List mapping to User profiles
          const { data: qData } = await supabase()
-            .from('queues')
-            .select('id, queue_number, status, user_id, created_at, profiles(name, email, phone)')
+            .from('queue_entries')
+            .select('id, queue_number, status, user_id, customer_name, phone_number, created_at, profiles(name, email)')
             .in('status', ['WAITING', 'CALLED'])
             .order('queue_number', { ascending: true })
          if (qData) setActiveQueue(qData)
 
          // Historical Data for CRM
          const { data: hData } = await supabase()
-            .from('queues')
-            .select('id, queue_number, status, created_at, profiles(name, email)')
+            .from('queue_entries')
+            .select('id, queue_number, status, created_at, customer_name, profiles(name, email)')
             .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
             .order('created_at', { ascending: false })
             .limit(100)
@@ -136,7 +141,27 @@ export default function AdminDashboard() {
 
              setMetrics({ todayCuts: today, todaySales: sales, weeklyCuts: week, churnRisk: 0, absences: absent })
          }
+
+         const { data: uData } = await supabase()
+            .from('profiles')
+            .select('*')
+            .order('created_at', { ascending: false })
+         if (uData) setUsersList(uData)
+
      } catch (err) { console.error(err) }
+  }
+
+  const toggleUserRole = async (userId: string, currentRole: string) => {
+     const newRole = currentRole === 'admin' ? 'user' : 'admin'
+     if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+         setUsersList(prev => prev.map(u => u.id === userId ? { ...u, role: newRole } : u))
+         return
+     }
+
+     if (window.confirm(`Change role to ${newRole.toUpperCase()}?`)) {
+         await supabase().from('profiles').update({ role: newRole }).eq('id', userId)
+         fetchData()
+     }
   }
 
   // Admin Actions
@@ -145,7 +170,7 @@ export default function AdminDashboard() {
         if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
             setActiveQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'CALLED' } : q))
         } else {
-            await supabase().from('queues').update({ status: 'CALLED' }).eq('id', id)
+            await supabase().from('queue_entries').update({ status: 'CALLED' }).eq('id', id)
             fetchData()
         }
 
@@ -168,7 +193,7 @@ export default function AdminDashboard() {
 
      console.log('Completing ticket:', id, user_id)
      // 1. Update queue
-     await supabase().from('queues').update({ status: 'COMPLETED' }).eq('id', id)
+     await supabase().from('queue_entries').update({ status: 'COMPLETED' }).eq('id', id)
      
      // 2. Add transaction record
      if (user_id) {
@@ -190,7 +215,7 @@ export default function AdminDashboard() {
             setMetrics(prev => ({ ...prev, absences: prev.absences + 1 }))
             return
         }
-        await supabase().from('queues').update({ status: 'ABSENT' }).eq('id', id)
+        await supabase().from('queue_entries').update({ status: 'ABSENT' }).eq('id', id)
         fetchData()
      }
   }
@@ -290,6 +315,10 @@ export default function AdminDashboard() {
             <Shield className={`w-5 h-5 ${activeTab === 'management' ? 'text-orange-600' : ''}`} />
             <span className="tracking-wide">Shop Management</span>
           </button>
+          <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'users' ? 'bg-green-100 text-green-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+            <UserPlus className={`w-5 h-5 ${activeTab === 'users' ? 'text-green-700' : ''}`} />
+            <span className="tracking-wide">User Access</span>
+          </button>
         </nav>
       </aside>
 
@@ -353,10 +382,10 @@ export default function AdminDashboard() {
                       <td className="px-8 py-6">
                         <div className="flex items-center gap-4">
                            <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black ${i === 0 ? 'bg-[#c5d0ff] text-[#004be2] shadow-sm border border-[#004be2]/10' : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/10'}`}>
-                              {q.profiles?.name ? q.profiles.name.substring(0, 2).toUpperCase() : 'CU'}
+                              {(q.customer_name || q.profiles?.name) ? (q.customer_name || q.profiles?.name).substring(0, 2).toUpperCase() : 'CU'}
                            </div>
                            <div>
-                             <p className="font-bold text-on-surface text-lg">{q.profiles?.name || 'Customer'}</p>
+                             <p className="font-bold text-on-surface text-lg">{q.customer_name || q.profiles?.name || 'Customer'}</p>
                              <span className={`font-black text-[10px] uppercase tracking-widest mt-1 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
                                 {q.status === 'CALLED' ? 'Summoned to chair' : (i === 0 ? 'Next Up' : 'Waiting in Lobby')}
                              </span>
@@ -369,13 +398,13 @@ export default function AdminDashboard() {
                          </div>
                       </td>
                       <td className="px-8 py-6 font-body text-sm font-medium text-on-surface-variant">
-                         {q.profiles?.email || 'N/A'}
+                         {q.phone_number || q.profiles?.phone || q.profiles?.email || 'N/A'}
                       </td>
                       <td className="px-8 py-6 text-right">
                          <div className="flex justify-end gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
                            {q.status !== 'CALLED' && (
                                <button 
-                                 onClick={() => handleCallCustomer(q.id, q.profiles?.name || 'Customer', q.profiles?.phone)}
+                                 onClick={() => handleCallCustomer(q.id, q.customer_name || q.profiles?.name || 'Customer', q.phone_number || q.profiles?.phone)}
                                  className="bg-white border border-[#545b00]/10 text-[#545b00] hover:bg-[#e5f638] hover:text-[#545b00] font-bold text-xs uppercase tracking-widest px-4 py-2 rounded-xl transition-colors shadow-sm"
                                >
                                  Call Customer
@@ -691,6 +720,48 @@ export default function AdminDashboard() {
            </section>
         </div>
         )}
+
+         {activeTab === 'users' && (
+         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+            <section className="bg-gradient-to-r from-green-100 to-green-50 p-8 md:p-10 rounded-[2rem] relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center border border-green-200/50 shadow-sm mb-10 gap-6">
+               <div className="relative z-10 w-full md:w-auto">
+                  <h1 className="text-4xl md:text-5xl font-black font-headline tracking-tighter text-green-900 mb-2 leading-tight">Access Control</h1>
+                  <p className="text-green-700 font-bold text-lg">Manage administrator privileges and registered users.</p>
+               </div>
+            </section>
+
+            <section className="bg-white rounded-[2rem] p-8 md:p-10 shadow-sm border border-outline-variant/10">
+               <h2 className="font-headline font-black text-2xl mb-8 text-on-surface">Registered Users</h2>
+               
+               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {usersList.length === 0 ? (
+                     <div className="col-span-full py-10 text-center text-on-surface-variant font-medium">Loading user profiles... If empty, make sure you ran the SQL setup script!</div>
+                  ) : usersList.map((u) => (
+                     <div key={u.id} className="p-5 rounded-2xl border border-outline-variant/10 bg-surface flex flex-col gap-4 shadow-sm hover:shadow-md transition-all">
+                        <div className="flex justify-between items-start">
+                           <div>
+                              <p className="font-headline font-black text-lg text-on-surface">{u.name || 'Unnamed'}</p>
+                              <p className="font-body text-sm text-on-surface-variant font-medium truncate max-w-[200px]">{u.email}</p>
+                              <p className="font-body text-xs text-on-surface-variant mt-1 opacity-70">ID: {u.id.substring(0, 8)}...</p>
+                           </div>
+                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${u.role === 'admin' ? 'bg-[#c5d0ff] text-[#004be2]' : 'bg-surface-container text-on-surface-variant'}`}>
+                              {u.role === 'admin' ? 'Admin' : 'User'}
+                           </span>
+                        </div>
+                        <div className="pt-4 border-t border-outline-variant/10 mt-auto">
+                           <button 
+                              onClick={() => toggleUserRole(u.id, u.role)}
+                              className={`w-full py-2.5 rounded-xl font-bold text-sm transition-colors text-center ${u.role === 'admin' ? 'text-red-600 bg-red-50 hover:bg-red-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}
+                           >
+                              {u.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}
+                           </button>
+                        </div>
+                     </div>
+                  ))}
+               </div>
+            </section>
+         </div>
+         )}
 
       </main>
     </div>

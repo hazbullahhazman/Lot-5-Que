@@ -7,7 +7,7 @@ import { LogOut, History, User, Clock, ArrowRight, ShieldCheck, Ticket } from 'l
 import { MarketingSections, SiteFooter } from '@/components/LandingUI'
 
 // Types
-type UserProfile = { id: string, name: string, email: string, role: string, referral_code?: string }
+type UserProfile = { id: string, name: string, email: string, role: string, phone?: string, referral_code?: string }
 type QueueEntry = { id: string, queue_number: number, status: string, created_at: string }
 
 export default function UserDashboard() {
@@ -49,7 +49,7 @@ export default function UserDashboard() {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
         channel = supabase()
           .channel('dashboard-events')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, () => {
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
              fetchInitialData()
           })
           .subscribe()
@@ -100,7 +100,7 @@ export default function UserDashboard() {
 
       // Active Queue list
       const { data: qList } = await supabase()
-         .from('queues')
+         .from('queue_entries')
          .select('id, queue_number, status')
          .in('status', ['WAITING', 'CALLED'])
          .order('queue_number', { ascending: true })
@@ -109,7 +109,7 @@ export default function UserDashboard() {
 
       // My specific ticket
       const { data: myQ } = await supabase()
-         .from('queues')
+         .from('queue_entries')
          .select('*')
          .eq('user_id', uid)
          .in('status', ['WAITING', 'CALLED'])
@@ -122,7 +122,7 @@ export default function UserDashboard() {
 
       // History
       const { data: hist } = await supabase()
-         .from('queues')
+         .from('queue_entries')
          .select('*')
          .eq('user_id', uid)
          .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
@@ -147,8 +147,10 @@ export default function UserDashboard() {
      }
 
      const nextTicketNumber = activeQueue.length > 0 ? activeQueue[activeQueue.length - 1].queue_number + 1 : currentServing + 1
-     const { data, error } = await supabase().from('queues').insert([{
+     const { data, error } = await supabase().from('queue_entries').insert([{
          user_id: profile?.id,
+         customer_name: profile?.name,
+         phone_number: profile?.phone,
          queue_number: nextTicketNumber,
          status: 'WAITING'
      }]).select().single()
@@ -171,7 +173,7 @@ export default function UserDashboard() {
      }
 
      if (!myTicket) return
-     await supabase().from('queues').update({ status: 'CANCELLED' }).eq('id', myTicket.id)
+     await supabase().from('queue_entries').update({ status: 'CANCELLED' }).eq('id', myTicket.id)
      setMyTicket(null)
      fetchInitialData()
   }
@@ -187,6 +189,14 @@ export default function UserDashboard() {
      }
      
      // Live mode - normally insert to Supabase here
+     await supabase().from('queue_entries').insert([{
+         user_id: profile?.id,
+         customer_name: profile?.name,
+         phone_number: profile?.phone,
+         queue_number: 999, // default indicator
+         status: 'WAITING',
+         booked_time: selectedSlot
+     }])
      alert("Booking submitted for " + selectedSlot)
   }
 
