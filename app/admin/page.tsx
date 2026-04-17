@@ -3,13 +3,14 @@
 import { useEffect, useState } from 'react'
 import { createClient as supabase } from '@/utils/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, X, Shield, Bell, LayoutDashboard, Users, UserPlus, LogOut, Search, Activity, UserX } from 'lucide-react'
+import { Check, X, Shield, Bell, LayoutDashboard, Users, UserPlus, LogOut, Search, Activity, UserX, Menu } from 'lucide-react'
 
 export default function AdminDashboard() {
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management' | 'users'>('management')
+  const [sidebarOpen, setSidebarOpen] = useState(false)
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management' | 'users'>('overview')
   
   // Data
   const [activeQueue, setActiveQueue] = useState<any[]>([])
@@ -280,19 +281,31 @@ export default function AdminDashboard() {
     <div className="bg-[#f9f6f5] text-on-surface selection:bg-primary-container selection:text-on-primary-container font-body min-h-screen">
       
       {/* TopNavBar */}
-      <header className="fixed top-0 left-0 right-0 z-50 bg-white transition-colors flex justify-between items-center w-full px-6 py-4 shadow-sm border-b border-outline-variant/10">
-        <div className="flex items-center gap-8">
-          <span className="text-2xl font-black tracking-tighter text-[#596000] font-headline">Lot 5<span className="text-[#004be2]">.</span> <span className="font-bold text-xs uppercase tracking-widest text-[#004be2] bg-[#c5d0ff] px-2 rounded-full py-0.5 ml-2 shadow-sm">Admin</span></span>
+      <header className="fixed top-0 left-0 right-0 z-50 bg-white transition-colors flex justify-between items-center w-full px-4 md:px-6 py-4 shadow-sm border-b border-outline-variant/10">
+        <div className="flex items-center gap-3 md:gap-8">
+          <button onClick={() => setSidebarOpen(true)} className="md:hidden p-2 bg-surface rounded-xl hover:bg-surface-container-high transition-colors">
+             <Menu className="w-5 h-5 text-on-surface" />
+          </button>
+          <span className="text-xl md:text-2xl font-black tracking-tighter text-[#596000] font-headline">Lot 5<span className="text-[#004be2]">.</span> <span className="font-bold text-[10px] md:text-xs uppercase tracking-widest text-[#004be2] bg-[#c5d0ff] px-2 rounded-full py-0.5 mt-1 sm:mt-0 sm:ml-2 shadow-sm align-middle hidden sm:inline-block">Admin</span></span>
         </div>
         <div className="flex items-center gap-4">
-          <button onClick={handleLogout} className="px-4 py-2 border border-outline-variant/10 bg-surface-container-low hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-full font-bold text-sm transition-all flex items-center gap-2">
-             Sign Out <LogOut className="w-4 h-4" />
+          <button onClick={handleLogout} className="px-3 md:px-4 py-2 border border-outline-variant/10 bg-surface-container-low hover:bg-red-50 hover:text-red-600 hover:border-red-100 rounded-full font-bold text-xs md:text-sm transition-all flex items-center gap-2">
+             <span className="hidden sm:inline">Sign Out</span> <LogOut className="w-4 h-4" />
           </button>
         </div>
       </header>
 
-      {/* SideNavBar (Desktop Only) */}
-      <aside className="hidden md:flex fixed left-0 top-0 h-full w-64 flex-col pt-24 pb-8 px-4 bg-white border-r border-outline-variant/10 shadow-sm transition-all z-40">
+      {/* Mobile Overlay */}
+      {sidebarOpen && (
+         <div onClick={() => setSidebarOpen(false)} className="md:hidden fixed inset-0 bg-black/60 z-50 animate-in fade-in transition-all"></div>
+      )}
+
+      {/* SideNavBar */}
+      <aside className={`fixed left-0 top-0 h-full w-64 flex-col pt-6 md:pt-24 pb-8 px-4 bg-white border-r border-outline-variant/10 shadow-xl transition-transform z-50 duration-300 flex md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+        <div className="flex justify-end md:hidden mb-2">
+           <button onClick={() => setSidebarOpen(false)} className="p-2 text-on-surface-variant hover:bg-surface rounded-full"><X className="w-5 h-5" /></button>
+        </div>
+        
         <div className="flex items-center gap-3 px-4 mb-8">
           <div className="w-12 h-12 rounded-2xl bg-[#004be2] flex items-center justify-center text-white shadow-sm overflow-hidden font-black text-xl border-2 border-white">
              {profile?.name ? profile.name.substring(0,2).toUpperCase() : 'AD'}
@@ -304,19 +317,19 @@ export default function AdminDashboard() {
         </div>
         
         <nav className="flex-1 space-y-2">
-          <button onClick={() => setActiveTab('overview')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'overview' ? 'bg-[#e5f638] text-[#545b00] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+          <button onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'overview' ? 'bg-[#e5f638] text-[#545b00] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
             <LayoutDashboard className={`w-5 h-5 ${activeTab === 'overview' ? 'text-[#545b00]' : ''}`} />
             <span className="tracking-wide">Queue Manager</span>
           </button>
-          <button onClick={() => setActiveTab('customers')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'customers' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+          <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'customers' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
             <Users className={`w-5 h-5 ${activeTab === 'customers' ? 'text-[#004be2]' : ''}`} />
             <span className="tracking-wide">CRM Analytics</span>
           </button>
-          <button onClick={() => setActiveTab('management')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'management' ? 'bg-orange-100 text-orange-600 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+          <button onClick={() => { setActiveTab('management'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'management' ? 'bg-orange-100 text-orange-600 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
             <Shield className={`w-5 h-5 ${activeTab === 'management' ? 'text-orange-600' : ''}`} />
             <span className="tracking-wide">Shop Management</span>
           </button>
-          <button onClick={() => setActiveTab('users')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'users' ? 'bg-green-100 text-green-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+          <button onClick={() => { setActiveTab('users'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'users' ? 'bg-green-100 text-green-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
             <UserPlus className={`w-5 h-5 ${activeTab === 'users' ? 'text-green-700' : ''}`} />
             <span className="tracking-wide">User Access</span>
           </button>
