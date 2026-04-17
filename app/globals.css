@@ -38,7 +38,7 @@
 
 /* Component specific utilities from mockups */
 .spotlight-gradient {
-    background: radial-gradient(circle at center, #e5f638 0%, #f9f6f5 100%);
+    background: radial-gradient(circle at center, #e5f63833 0%, #f9f6f5 70%);
 }
 
 .spotlight-bg {

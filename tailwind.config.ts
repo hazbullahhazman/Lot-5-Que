@@ -4,6 +4,7 @@ const config: Config = {
   darkMode: "class",
   content: [
     "./app/**/*.{js,ts,jsx,tsx,mdx}",
+    "./components/**/*.{js,ts,jsx,tsx,mdx}",
   ],
   theme: {
     extend: {
@@ -58,7 +59,12 @@ const config: Config = {
         "surface-container-lowest": "#ffffff",
         "tertiary": "#5b5b5b",
         "on-tertiary-fixed-variant": "#6d6d6d",
-        "background": "#f9f6f5"
+        "background": "#f9f6f5",
+        "landing-primary": "#EEFF41",
+        "landing-bg-light": "#FAFAFA",
+        "landing-bg-dark": "#0A0A0A",
+        "landing-surface-light": "#FFFFFF",
+        "landing-surface-dark": "#141414",
       },
       fontFamily: {
         "headline": ["Manrope", "sans-serif"],
