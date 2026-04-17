@@ -167,19 +167,20 @@ export default function AdminDashboard() {
   // Admin Actions
   const handleCallCustomer = async (id: string, name: string, phone?: string) => {
      if (window.confirm(`Call ${name} via WhatsApp?`)) {
-        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
-            setActiveQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'CALLED' } : q))
-        } else {
-            await supabase().from('queue_entries').update({ status: 'CALLED' }).eq('id', id)
-            fetchData()
-        }
-
+        // Open WhatsApp immediately to bypass iOS Safari popup blockers
         if (phone) {
             const cleanPhone = phone.replace(/[^\d]/g, '')
             const message = "bro daripada Lot 5 Barbershop, lagi 15 minit turn awak."
             window.open(`https://wa.me/${cleanPhone}?text=${encodeURIComponent(message)}`, '_blank')
         } else {
             alert("Customer did not provide a phone number.")
+        }
+
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+            setActiveQueue(prev => prev.map(q => q.id === id ? { ...q, status: 'CALLED' } : q))
+        } else {
+            // Run async DB call without blocking the above pop-up
+            supabase().from('queue_entries').update({ status: 'CALLED' }).eq('id', id).then(() => fetchData())
         }
      }
   }
@@ -360,11 +361,11 @@ export default function AdminDashboard() {
           <div className="overflow-x-auto">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="text-on-surface-variant text-[10px] font-bold uppercase tracking-widest bg-surface/30 border-b border-outline-variant/5">
-                   <th className="px-8 py-4">Status & Name</th>
-                   <th className="px-8 py-4">Ticket</th>
-                   <th className="px-8 py-4">Contact</th>
-                   <th className="px-8 py-4 text-right">Admin Actions</th>
+                 <tr className="text-on-surface-variant text-[9px] md:text-[10px] font-bold uppercase tracking-widest bg-surface/30 border-b border-outline-variant/5">
+                   <th className="px-4 md:px-8 py-3 md:py-4">Status & Name</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4">Ticket</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4 hidden sm:table-cell">Contact</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4 text-right">Admin Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-outline-variant/5">
@@ -379,29 +380,29 @@ export default function AdminDashboard() {
                       key={q.id} 
                       className="group hover:bg-[#f8fcfd] transition-colors duration-200"
                     >
-                      <td className="px-8 py-6">
-                        <div className="flex items-center gap-4">
-                           <div className={`w-12 h-12 rounded-2xl flex flex-col items-center justify-center font-black ${i === 0 ? 'bg-[#c5d0ff] text-[#004be2] shadow-sm border border-[#004be2]/10' : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/10'}`}>
+                      <td className="px-4 md:px-8 py-4 md:py-6">
+                        <div className="flex items-center gap-3 md:gap-4">
+                           <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl flex flex-col items-center justify-center font-black ${i === 0 ? 'bg-[#c5d0ff] text-[#004be2] shadow-sm border border-[#004be2]/10' : 'bg-surface-container-low text-on-surface-variant border border-outline-variant/10'}`}>
                               {(q.customer_name || q.profiles?.name) ? (q.customer_name || q.profiles?.name).substring(0, 2).toUpperCase() : 'CU'}
                            </div>
                            <div>
-                             <p className="font-bold text-on-surface text-lg">{q.customer_name || q.profiles?.name || 'Customer'}</p>
-                             <span className={`font-black text-[10px] uppercase tracking-widest mt-1 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
+                             <p className="font-bold text-on-surface text-base md:text-lg">{q.customer_name || q.profiles?.name || 'Customer'}</p>
+                             <span className={`font-black text-[9px] md:text-[10px] uppercase tracking-widest mt-1 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
                                 {q.status === 'CALLED' ? 'Summoned to chair' : (i === 0 ? 'Next Up' : 'Waiting in Lobby')}
                              </span>
                            </div>
                         </div>
                       </td>
-                      <td className="px-8 py-6">
-                         <div className="bg-[#1a1a1a] text-[#e5f638] px-4 py-2 rounded-xl inline-flex items-center shadow-inner font-headline font-black">
+                      <td className="px-4 md:px-8 py-4 md:py-6">
+                         <div className="bg-[#1a1a1a] text-[#e5f638] px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl inline-flex items-center shadow-inner font-headline font-black text-sm md:text-base">
                             <span className="opacity-50 font-medium mr-1">#</span>{q.queue_number}
                          </div>
                       </td>
-                      <td className="px-8 py-6 font-body text-sm font-medium text-on-surface-variant">
+                      <td className="px-4 md:px-8 py-4 md:py-6 font-body text-xs md:text-sm font-medium text-on-surface-variant hidden sm:table-cell break-all">
                          {q.phone_number || q.profiles?.phone || q.profiles?.email || 'N/A'}
                       </td>
-                      <td className="px-8 py-6 text-right">
-                         <div className="flex justify-end gap-3 opacity-80 group-hover:opacity-100 transition-opacity">
+                      <td className="px-4 md:px-8 py-4 md:py-6 text-right">
+                         <div className="flex justify-end gap-2 md:gap-3 opacity-100 md:opacity-80 group-hover:opacity-100 transition-opacity">
                            {q.status !== 'CALLED' && (
                                <button 
                                  onClick={() => handleCallCustomer(q.id, q.customer_name || q.profiles?.name || 'Customer', q.phone_number || q.profiles?.phone)}
