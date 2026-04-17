@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/utils/supabase/client'
+import { createClient as supabase } from '@/utils/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { Check, X, Shield, Bell, LayoutDashboard, Users, UserPlus, LogOut, Search, Activity, UserX } from 'lucide-react'
 

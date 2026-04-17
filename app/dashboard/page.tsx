@@ -1,7 +1,7 @@
 'use client'
 
 import { useEffect, useState } from 'react'
-import { supabase } from '@/utils/supabase/client'
+import { createClient as supabase } from '@/utils/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
 import { LogOut, History, User, Clock, ArrowRight, ShieldCheck, Ticket } from 'lucide-react'
 import { MarketingSections, SiteFooter } from '@/components/LandingUI'

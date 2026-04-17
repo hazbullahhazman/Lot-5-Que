@@ -1,7 +1,7 @@
 'use client'
 
 import { useState } from 'react'
-import { supabase } from '@/utils/supabase/client'
+import { createClient as supabase } from '@/utils/supabase/client'
 import { motion } from 'framer-motion'
 import { ArrowRight, Mail, Lock, AlertCircle } from 'lucide-react'
 
