@@ -155,7 +155,8 @@ export default function UserDashboard() {
          return
      }
 
-     const nextTicketNumber = activeQueue.length > 0 ? activeQueue[activeQueue.length - 1].queue_number + 1 : currentServing + 1
+     const walkInQueue = activeQueue.filter((q: any) => q.queue_number < 999)
+     const nextTicketNumber = walkInQueue.length > 0 ? walkInQueue[walkInQueue.length - 1].queue_number + 1 : currentServing + 1
      const { data, error } = await supabase().from('queue_entries').insert([{
          user_id: profile?.id,
          customer_name: profile?.name,
