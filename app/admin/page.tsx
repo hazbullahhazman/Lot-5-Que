@@ -43,9 +43,9 @@ export default function AdminDashboard() {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
         channel = supabase()
           .channel('admin-events')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'queues' }, () => {
-             fetchData()
-          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => fetchData())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => fetchData())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'profiles' }, () => fetchData())
           .subscribe()
     }
 
@@ -147,6 +147,8 @@ export default function AdminDashboard() {
             .from('profiles')
             .select('*')
             .order('created_at', { ascending: false })
+         if (uData) setUsersList(uData)
+         
          const { data: sData } = await supabase()
             .from('settings')
             .select('raw_settings')
@@ -585,7 +587,7 @@ export default function AdminDashboard() {
           </section>
 
         </div>
-        ) : (
+        ) : activeTab === 'management' ? (
         /* -- SHOP MANAGEMENT VIEW -- */
         <div className="animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-5xl">
            <div className="mb-10">
@@ -765,7 +767,7 @@ export default function AdminDashboard() {
         )}
 
          {activeTab === 'users' && (
-         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500">
+         <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl">
             <section className="bg-gradient-to-r from-green-100 to-green-50 p-8 md:p-10 rounded-[2rem] relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center border border-green-200/50 shadow-sm mb-10 gap-6">
                <div className="relative z-10 w-full md:w-auto">
                   <h1 className="text-4xl md:text-5xl font-black font-headline tracking-tighter text-green-900 mb-2 leading-tight">Access Control</h1>
@@ -773,34 +775,52 @@ export default function AdminDashboard() {
                </div>
             </section>
 
-            <section className="bg-white rounded-[2rem] p-8 md:p-10 shadow-sm border border-outline-variant/10">
-               <h2 className="font-headline font-black text-2xl mb-8 text-on-surface">Registered Users</h2>
+            <section className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-outline-variant/10">
+               <div className="px-8 py-6 flex flex-col md:flex-row justify-between items-start md:items-center bg-white border-b border-outline-variant/5 gap-4">
+                 <div>
+                    <h2 className="font-headline font-black text-2xl text-on-surface">Registered Users</h2>
+                 </div>
+               </div>
                
-               <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                  {usersList.length === 0 ? (
-                     <div className="col-span-full py-10 text-center text-on-surface-variant font-medium">Loading user profiles... If empty, make sure you ran the SQL setup script!</div>
-                  ) : usersList.map((u) => (
-                     <div key={u.id} className="p-5 rounded-2xl border border-outline-variant/10 bg-surface flex flex-col gap-4 shadow-sm hover:shadow-md transition-all">
-                        <div className="flex justify-between items-start">
-                           <div>
-                              <p className="font-headline font-black text-lg text-on-surface">{u.name || 'Unnamed'}</p>
-                              <p className="font-body text-sm text-on-surface-variant font-medium truncate max-w-[200px]">{u.email}</p>
-                              <p className="font-body text-xs text-on-surface-variant mt-1 opacity-70">ID: {u.id.substring(0, 8)}...</p>
-                           </div>
-                           <span className={`px-3 py-1 rounded-full text-[10px] font-black uppercase tracking-widest ${u.role === 'admin' ? 'bg-[#c5d0ff] text-[#004be2]' : 'bg-surface-container text-on-surface-variant'}`}>
-                              {u.role === 'admin' ? 'Admin' : 'User'}
-                           </span>
-                        </div>
-                        <div className="pt-4 border-t border-outline-variant/10 mt-auto">
-                           <button 
-                              onClick={() => toggleUserRole(u.id, u.role)}
-                              className={`w-full py-2.5 rounded-xl font-bold text-sm transition-colors text-center ${u.role === 'admin' ? 'text-red-600 bg-red-50 hover:bg-red-100' : 'text-green-700 bg-green-50 hover:bg-green-100'}`}
-                           >
-                              {u.role === 'admin' ? 'Revoke Admin' : 'Make Admin'}
-                           </button>
-                        </div>
-                     </div>
-                  ))}
+               <div className="overflow-x-auto max-h-[600px]">
+                  <table className="w-full text-left border-collapse">
+                     <thead className="sticky top-0 z-10 bg-white/95 backdrop-blur-md shadow-sm">
+                        <tr className="text-on-surface-variant text-[10px] font-black uppercase tracking-widest border-b border-outline-variant/10">
+                           <th className="px-8 py-5">Full Name</th>
+                           <th className="px-8 py-5">Email Address</th>
+                           <th className="px-8 py-5 text-center">System Role</th>
+                           <th className="px-8 py-5 text-right">Actions</th>
+                        </tr>
+                     </thead>
+                     <tbody className="divide-y divide-outline-variant/5">
+                        {usersList.length === 0 ? (
+                           <tr><td colSpan={4} className="py-10 text-center text-on-surface-variant font-medium">Loading user profiles... If empty, make sure you ran the SQL setup script!</td></tr>
+                        ) : usersList.map((u) => (
+                           <tr key={u.id} className="hover:bg-surface transition-colors group">
+                              <td className="px-8 py-5">
+                                 <p className="font-headline font-black text-lg text-on-surface">{u.name || 'Unnamed'}</p>
+                                 <p className="font-body text-[10px] uppercase font-bold text-on-surface-variant/70 mt-0.5 tracking-widest">ID: {u.id.substring(0, 8)}</p>
+                              </td>
+                              <td className="px-8 py-5">
+                                 <p className="font-body text-sm font-medium text-on-surface-variant">{u.email}</p>
+                              </td>
+                              <td className="px-8 py-5 text-center">
+                                 <span className={`inline-block px-3 py-1.5 rounded-full text-[10px] font-black uppercase tracking-widest shadow-sm border ${u.role === 'admin' ? 'bg-[#c5d0ff]/50 border-[#004be2]/20 text-[#004be2]' : 'bg-surface-container border-outline-variant/10 text-on-surface-variant'}`}>
+                                    {u.role === 'admin' ? 'Administrator' : 'General User'}
+                                 </span>
+                              </td>
+                              <td className="px-8 py-5 text-right">
+                                 <button 
+                                    onClick={() => toggleUserRole(u.id, u.role)}
+                                    className={`px-4 py-2 rounded-xl font-bold text-xs uppercase tracking-widest transition-colors shadow-sm ${u.role === 'admin' ? 'text-red-600 bg-red-50 hover:bg-red-500 hover:text-white border border-red-100' : 'text-green-700 bg-green-50 hover:bg-green-500 hover:text-white border border-green-200'}`}
+                                 >
+                                    {u.role === 'admin' ? 'Revoke Admin' : 'Grant Admin'}
+                                 </button>
+                              </td>
+                           </tr>
+                        ))}
+                     </tbody>
+                  </table>
                </div>
             </section>
          </div>

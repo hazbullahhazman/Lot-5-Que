@@ -49,9 +49,8 @@ export default function UserDashboard() {
     if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
         channel = supabase()
           .channel('dashboard-events')
-          .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => {
-             fetchInitialData()
-          })
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'queue_entries' }, () => fetchInitialData())
+          .on('postgres_changes', { event: '*', schema: 'public', table: 'settings' }, () => fetchInitialData())
           .subscribe()
     }
 
