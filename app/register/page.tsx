@@ -57,6 +57,7 @@ function RegisterForm() {
         setError(error.message)
       } else {
         setSuccess(true)
+        setTimeout(() => window.location.href = '/dashboard', 1500)
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.')
@@ -89,10 +90,10 @@ function RegisterForm() {
                <div className="w-20 h-20 bg-[#e5f638] rounded-full flex items-center justify-center text-[#545b00] mx-auto mb-6 shadow-sm border border-[#545b00]/10">
                   <span className="material-symbols-outlined text-4xl">check_circle</span>
                </div>
-               <h3 className="font-headline text-2xl font-black text-[#545b00] mb-2">Check Your Email!</h3>
-               <p className="text-on-surface-variant font-medium mb-8">We have sent a verification link to your email. Click it to activate your account and join the queue.</p>
-               <a href="/login" className="w-full inline-block bg-[#004be2] text-white font-headline font-extrabold text-lg py-4 rounded-full shadow-lg shadow-[#004be2]/20 hover:scale-[1.02] active:scale-[0.98] transition-all duration-200">
-                  Go to Login
+               <h3 className="font-headline text-2xl font-black text-[#545b00] mb-2">You're In!</h3>
+               <p className="text-on-surface-variant font-medium mb-8">Registration successful. Connecting you securely to the portal...</p>
+               <a href="/dashboard" className="w-full inline-flex items-center justify-center gap-3 bg-[#004be2] text-white font-headline font-extrabold text-lg py-4 rounded-full shadow-lg shadow-[#004be2]/20 transition-all duration-200 pointer-events-none">
+                  <span className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin"></span> Entering Dashboard
                </a>
             </motion.div>
           ) : (

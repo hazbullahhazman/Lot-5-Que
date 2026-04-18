@@ -147,7 +147,17 @@ export default function AdminDashboard() {
             .from('profiles')
             .select('*')
             .order('created_at', { ascending: false })
-         if (uData) setUsersList(uData)
+         const { data: sData } = await supabase()
+            .from('settings')
+            .select('raw_settings')
+            .eq('id', 1)
+            .single()
+         if (sData?.raw_settings) {
+            setShopSettings(sData.raw_settings as any)
+         } else {
+             const local = localStorage.getItem('lot5_shop_settings')
+             if (local) setShopSettings(JSON.parse(local))
+         }
 
      } catch (err) { console.error(err) }
   }
@@ -222,9 +232,17 @@ export default function AdminDashboard() {
      }
   }
 
-  const saveShopSettings = (newSettings: any) => {
+  const [isSaving, setIsSaving] = useState(false)
+  const saveShopSettings = async (newSettings: any) => {
       setShopSettings(newSettings)
       localStorage.setItem('lot5_shop_settings', JSON.stringify(newSettings))
+      setIsSaving(true)
+      if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+         await supabase()
+            .from('settings')
+            .upsert({ id: 1, raw_settings: newSettings }, { onConflict: 'id' })
+      }
+      setTimeout(() => setIsSaving(false), 1000)
   }
 
   const handleAddBarber = () => {
@@ -260,7 +278,8 @@ export default function AdminDashboard() {
              if (field === 'active') return { ...b, active: !b.active }
              let nextRole = 'both'
              if (b.role === 'both') nextRole = 'queue'
-             else if (b.role === 'queue') nextRole = 'slot'
+             else if (b.role === 'queue') nextRole = 'booking'
+             else if (b.role === 'booking') nextRole = 'absent'
              return { ...b, role: nextRole }
           })
       }
@@ -578,7 +597,16 @@ export default function AdminDashboard() {
               
               {/* Box 1: Operations Mode */}
               <div className="bg-white rounded-[2rem] shadow-sm border border-outline-variant/10 p-8 md:p-10">
-                 <h3 className="font-headline font-black text-xl mb-6 text-on-surface">Operations Mode</h3>
+                 <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 gap-4">
+                    <h3 className="font-headline font-black text-xl text-on-surface">Operations Mode</h3>
+                    <button 
+                       onClick={() => saveShopSettings(shopSettings)}
+                       disabled={isSaving}
+                       className={`px-6 py-2 rounded-full font-bold text-[10px] uppercase tracking-widest transition-all shadow-sm flex items-center gap-2 ${isSaving ? 'bg-green-100 text-green-700' : 'bg-slate-900 text-white hover:bg-slate-800 hover:scale-105 active:scale-95'}`}
+                    >
+                       {isSaving ? <><Check className="w-4 h-4"/> Syncing to Cloud...</> : 'Force Save Settings'}
+                    </button>
+                 </div>
                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
                     {[ 
                       { id: 'both', label: 'Both Open', sub: 'QUEUE & SLOTS ACTIVE' },
@@ -693,10 +721,11 @@ export default function AdminDashboard() {
                                 className={`text-[9px] sm:text-[10px] font-bold uppercase tracking-widest px-2 sm:px-3 py-2 rounded-lg border flex items-center gap-1.5 transition-colors whitespace-nowrap
                                   ${barber.role === 'both' ? 'bg-[#e5f638]/20 border-[#545b00]/20 text-[#545b00]' 
                                   : barber.role === 'queue' ? 'bg-orange-50 border-orange-200 text-orange-600'
-                                  : 'bg-[#c5d0ff]/50 border-[#004be2]/20 text-[#004be2]'}`}
+                                  : barber.role === 'booking' ? 'bg-[#c5d0ff]/50 border-[#004be2]/20 text-[#004be2]'
+                                  : 'bg-red-50 border-red-200 text-red-600'}`}
                              >
-                                <span className={`hidden sm:block w-1.5 h-1.5 rounded-full ${barber.role==='both'?'bg-[#545b00]':barber.role==='queue'?'bg-orange-600':'bg-[#004be2]'}`}></span>
-                                {barber.role === 'both' ? 'Walk-in & Slots' : barber.role === 'queue' ? 'Walk-ins Only' : 'Slots Only'}
+                                <span className={`hidden sm:block w-1.5 h-1.5 rounded-full ${barber.role==='both'?'bg-[#545b00]':barber.role==='queue'?'bg-orange-600':barber.role==='booking'?'bg-[#004be2]':'bg-red-600'}`}></span>
+                                {barber.role === 'both' ? 'Walk-in & Book' : barber.role === 'queue' ? 'Walk-ins Only' : barber.role === 'booking' ? 'Booking Only' : 'Absent'}
                              </button>
                              
                              {/* Desktop explicit delete */}

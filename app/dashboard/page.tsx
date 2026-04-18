@@ -39,7 +39,7 @@ export default function UserDashboard() {
   const [activeTab, setActiveTab] = useState<'queue' | 'history' | 'profile' | 'referrals'>('queue')
 
   const activeWalkInBarbers = Math.max(1, shopSettings.barbers.filter(b => b.active && (b.role === 'both' || b.role === 'queue')).length);
-  const activeBookingBarbers = Math.max(1, shopSettings.barbers.filter(b => b.active && (b.role === 'both' || b.role === 'slot')).length);
+  const activeBookingBarbers = Math.max(1, shopSettings.barbers.filter(b => b.active && (b.role === 'both' || b.role === 'booking')).length);
   const slotIntervalMinutes = Math.floor(30 / activeBookingBarbers);
 
   useEffect(() => {
@@ -98,10 +98,20 @@ export default function UserDashboard() {
       const uid = userIdStr || profile?.id
       if (!uid || uid === 'mock-123') return
 
-      // Active Queue list
+      // Global Shop Settings
+      const { data: sData } = await supabase().from('settings').select('raw_settings').eq('id', 1).single()
+      let currentSettings = shopSettings
+      if (sData?.raw_settings) {
+         currentSettings = sData.raw_settings as any
+         setShopSettings(currentSettings)
+         if (currentSettings.operationsMode === 'slot') setQueueMode('booking')
+         if (currentSettings.operationsMode === 'queue') setQueueMode('walk-in')
+      }
+
+      // Active Queue list (Used for capacity limits & queue positioning)
       const { data: qList } = await supabase()
          .from('queue_entries')
-         .select('id, queue_number, status')
+         .select('id, queue_number, status, booked_time')
          .in('status', ['WAITING', 'CALLED'])
          .order('queue_number', { ascending: true })
       
@@ -220,11 +230,24 @@ export default function UserDashboard() {
      const bStart = parseTime(shopSettings.breakStart);
      const bEnd = parseTime(shopSettings.breakEnd);
 
-     for (let t = open; t < close; t += slotIntervalMinutes) {
+     // Count bookings per slot
+     const slotCounts: Record<string, number> = {};
+     activeQueue.forEach(q => {
+         if (q.booked_time && q.status === 'WAITING') {
+            slotCounts[q.booked_time] = (slotCounts[q.booked_time] || 0) + 1;
+         }
+     });
+
+     for (let t = open; t < close; t += 30) {
          if (t >= bStart && t < bEnd) continue;
          const h = Math.floor(t / 60).toString().padStart(2, '0');
          const m = (t % 60).toString().padStart(2, '0');
-         slots.push(`${h}:${m}`);
+         const timeString = `${h}:${m}`;
+         
+         // If bookings exceed or equal the number of available active booking barbers, it's full
+         const isFull = (slotCounts[timeString] || 0) >= activeBookingBarbers;
+         
+         slots.push({ time: timeString, full: isFull });
      }
      return slots;
   }
@@ -291,16 +314,18 @@ export default function UserDashboard() {
                     <div className="relative z-10 max-w-lg mx-auto">
                       
                       {/* Segmented Control */}
-                      <div className="flex bg-surface-container p-1 rounded-2xl mb-10 w-full">
-                         <button 
-                           onClick={() => setQueueMode('walk-in')}
-                           className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'walk-in' ? 'bg-white shadow-sm text-on-surface' : 'text-on-surface-variant hover:bg-white/50'}`}
-                         >Walk-in Queue</button>
-                         <button 
-                           onClick={() => setQueueMode('booking')}
-                           className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'booking' ? 'bg-[#004be2] shadow-sm text-white' : 'text-on-surface-variant hover:bg-white/50'}`}
-                         >Book a Slot</button>
-                      </div>
+                      {shopSettings.operationsMode === 'both' && (
+                        <div className="flex bg-surface-container p-1 rounded-2xl mb-10 w-full">
+                           <button 
+                             onClick={() => setQueueMode('walk-in')}
+                             className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'walk-in' ? 'bg-white shadow-sm text-on-surface' : 'text-on-surface-variant hover:bg-white/50'}`}
+                           >Walk-in Queue</button>
+                           <button 
+                             onClick={() => setQueueMode('booking')}
+                             className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'booking' ? 'bg-[#004be2] shadow-sm text-white' : 'text-on-surface-variant hover:bg-white/50'}`}
+                           >Book a Slot</button>
+                        </div>
+                      )}
 
                       {queueMode === 'walk-in' ? (
                           <>
@@ -318,18 +343,22 @@ export default function UserDashboard() {
                           <div className="text-left">
                              <h1 className="font-headline text-4xl font-black tracking-tight text-[#545b00] mb-6 text-center">Book a Slot</h1>
                              <div className="mb-6 h-[200px] overflow-y-auto custom-scrollbar pr-2">
-                                <div className="grid grid-cols-3 gap-3">
-                                   {generateSlots().map(slot => (
-                                      <button 
-                                        key={slot}
-                                        onClick={() => setSelectedSlot(slot)}
-                                        className={`py-3 rounded-xl font-black text-sm transition-all border outline-none ${selectedSlot === slot ? 'bg-[#e5f638] border-[#545b00]/20 text-[#545b00] shadow-sm' : 'bg-surface border-outline-variant/10 text-on-surface hover:border-outline-variant/30 hover:bg-surface-container-lowest'}`}
-                                      >
-                                        {slot}
-                                      </button>
-                                   ))}
-                                </div>
-                             </div>
+                                 <div className="grid grid-cols-3 gap-3">
+                                    {generateSlots().map(slotObj => (
+                                       <button 
+                                         key={slotObj.time}
+                                         disabled={slotObj.full}
+                                         onClick={() => setSelectedSlot(slotObj.time)}
+                                         className={`py-3 rounded-xl font-black text-sm flex flex-col items-center justify-center transition-all border outline-none 
+                                          ${slotObj.full ? 'bg-surface-container border-transparent text-outline-variant opacity-50 cursor-not-allowed grayscale' :
+                                          (selectedSlot === slotObj.time ? 'bg-[#e5f638] border-[#545b00]/20 text-[#545b00] shadow-sm scale-105' : 'bg-surface border-outline-variant/10 text-on-surface hover:border-outline-variant/30 hover:bg-surface-container-lowest')}`}
+                                       >
+                                         {slotObj.time}
+                                         {slotObj.full && <span className="text-[8px] uppercase tracking-widest mt-0.5 opacity-80">Full</span>}
+                                       </button>
+                                    ))}
+                                 </div>
+                              </div>
                              
                              <div className="space-y-4 mb-8">
                                 <div>
