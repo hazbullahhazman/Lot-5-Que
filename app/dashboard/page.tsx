@@ -333,7 +333,7 @@ export default function UserDashboard() {
                                <span className="material-symbols-outlined text-4xl">content_cut</span>
                             </div>
                             <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface mb-4">Ready for a fresh cut?</h1>
-                            <p className="text-on-surface-variant font-medium mb-10 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn. Currently, there are <span className="font-extrabold text-[#004be2]">{activeQueue.length}</span> people waiting.</p>
+                            <p className="text-on-surface-variant font-medium mb-10 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn. Currently, there are <span className="font-extrabold text-[#004be2]">{activeQueue.filter((q: any) => !q.booked_time).length}</span> people waiting.</p>
                             
                             <button onClick={handleJoinQueue} className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3">
                                Join the Queue <ArrowRight className="w-5 h-5" />
