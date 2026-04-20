@@ -82,6 +82,7 @@ export default function AdminDashboard() {
       setActiveQueue([
           { id: 'q1', queue_number: 14, status: 'WAITING', customer_name: 'Julian D.', phone_number: '60123456789' },
           { id: 'q2', queue_number: 15, status: 'WAITING', customer_name: 'Marcus K.', phone_number: '60198765432' },
+          { id: 'q3', queue_number: 999, status: 'WAITING', customer_name: 'Syed (Booking)', phone_number: '60132273797', booked_time: '18:30' }
       ])
       setHistory([
           { id: 'h1', status: 'COMPLETED', created_at: new Date().toISOString(), customer_name: 'John Doe' }
@@ -100,7 +101,7 @@ export default function AdminDashboard() {
          // Active Queue List mapping to User profiles
          const { data: qData } = await supabase()
             .from('queue_entries')
-            .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, profiles(name, email)')
+            .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, booked_time, profiles(name, email)')
             .in('status', ['WAITING', 'CALLED'])
             .order('queue_number', { ascending: true })
          if (qData) setActiveQueue(qData)
@@ -404,7 +405,7 @@ export default function AdminDashboard() {
               </thead>
               <tbody className="divide-y divide-outline-variant/5">
                 <AnimatePresence mode="popLayout">
-                  {activeQueue.map((q, i) => (
+                  {activeQueue.filter(q => !q.booked_time).map((q, i) => (
                     <motion.tr 
                       layout
                       initial={{ opacity: 0, x: -10 }}
@@ -467,14 +468,114 @@ export default function AdminDashboard() {
                       </td>
                     </motion.tr>
                   ))}
-                  
-                  {activeQueue.length === 0 && (
+                  {activeQueue.filter(q => !q.booked_time).length === 0 && (
                      <tr>
                         <td colSpan={4} className="px-8 py-20 text-center">
                            <div className="w-16 h-16 bg-surface-container mx-auto rounded-full flex items-center justify-center mb-4">
                               <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">local_cafe</span>
                            </div>
                            <p className="text-on-surface-variant font-bold">Queue is empty. Relax and grab a coffee.</p>
+                        </td>
+                     </tr>
+                  )}
+                </AnimatePresence>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+        {/* Bookings Table */}
+        <section className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-outline-variant/10 mt-10">
+          <div className="px-8 py-6 flex justify-between items-center bg-white border-b border-outline-variant/5">
+            <h2 className="font-headline font-bold text-2xl text-on-surface">Bookings Schedule</h2>
+            <span className="px-4 py-1.5 bg-[#c5d0ff] text-[#004be2] text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 shadow-sm border border-[#004be2]/10">
+               <span className="w-2 h-2 bg-[#004be2] rounded-full animate-pulse"></span> SCHEDULE
+            </span>
+          </div>
+          
+          <div className="overflow-x-auto">
+            <table className="w-full text-left border-collapse">
+              <thead>
+                 <tr className="text-on-surface-variant text-[9px] md:text-[10px] font-bold uppercase tracking-widest bg-surface/30 border-b border-outline-variant/5">
+                   <th className="px-4 md:px-8 py-3 md:py-4">Status & Name</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4">Time Slot</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4 hidden sm:table-cell">Contact</th>
+                   <th className="px-4 md:px-8 py-3 md:py-4 text-right">Admin Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-outline-variant/5">
+                <AnimatePresence mode="popLayout">
+                  {activeQueue.filter(q => q.booked_time).sort((a,b) => a.booked_time.localeCompare(b.booked_time)).map((q, i) => (
+                    <motion.tr 
+                      layout
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      exit={{ opacity: 0, x: 10, filter: 'blur(4px)' }}
+                      transition={{ duration: 0.3 }}
+                      key={q.id} 
+                      className="group hover:bg-[#f8fcfd] transition-colors duration-200"
+                    >
+                      <td className="px-4 md:px-8 py-4 md:py-6">
+                        <div className="flex items-center gap-3 md:gap-4">
+                           <div className={`w-10 h-10 md:w-12 md:h-12 rounded-2xl flex flex-col items-center justify-center font-black bg-surface-container-low text-on-surface-variant border border-outline-variant/10`}>
+                              {(q.customer_name || q.profiles?.name) ? (q.customer_name || q.profiles?.name).substring(0, 2).toUpperCase() : 'CU'}
+                           </div>
+                           <div>
+                             <p className="font-bold text-on-surface text-base md:text-lg">{q.customer_name || q.profiles?.name || 'Customer'}</p>
+                             <span className={`font-black text-[9px] md:text-[10px] uppercase tracking-widest mt-1 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : 'text-on-surface-variant'}`}>
+                                {q.status === 'CALLED' ? 'Summoned to chair' : 'Awaiting Arrival'}
+                             </span>
+                           </div>
+                        </div>
+                      </td>
+                      <td className="px-4 md:px-8 py-4 md:py-6">
+                         <div className="bg-[#e5f638]/20 border border-[#545b00]/20 text-[#545b00] px-3 md:px-4 py-1.5 md:py-2 rounded-lg md:rounded-xl inline-flex items-center font-headline font-black text-sm md:text-base">
+                            {q.booked_time}
+                         </div>
+                      </td>
+                      <td className="px-4 md:px-8 py-4 md:py-6 font-body text-xs md:text-sm font-medium text-on-surface-variant hidden sm:table-cell break-all">
+                         {q.phone_number || q.profiles?.phone || q.profiles?.email || 'N/A'}
+                      </td>
+                      <td className="px-4 md:px-8 py-4 md:py-6 text-right">
+                         <div className="flex justify-end gap-2 md:gap-3 opacity-100 md:opacity-80 group-hover:opacity-100 transition-opacity">
+                           {q.status !== 'CALLED' && (
+                               <button 
+                                 onClick={() => handleCallCustomer(q.id, q.customer_name || q.profiles?.name || 'Customer', q.phone_number || q.profiles?.phone)}
+                                 className="bg-white border border-[#545b00]/10 text-[#545b00] hover:bg-[#e5f638] hover:text-[#545b00] font-bold text-xs uppercase tracking-widest px-4 py-2 rounded-xl transition-colors shadow-sm"
+                               >
+                                 Call Customer
+                               </button>
+                           )}
+                           
+                           {/* Mark Attended -> Completed */}
+                           <button 
+                             onClick={() => handleMarkAttended(q.id, q.user_id)}
+                             className="bg-green-50 border border-green-200 text-green-600 hover:bg-green-500 hover:text-white font-bold text-xs uppercase tracking-widest px-3 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center"
+                             title="Mark as Attended (Charge)"
+                           >
+                             <Check className="w-5 h-5" />
+                           </button>
+
+                           {/* Mark Absent */}
+                           <button 
+                             onClick={() => handleMarkAbsent(q.id)}
+                             className="bg-red-50 border border-red-200 text-red-600 hover:bg-red-500 hover:text-white font-bold text-xs uppercase tracking-widest px-3 py-2 rounded-xl transition-colors shadow-sm flex items-center justify-center"
+                             title="Mark as No Show (Absent)"
+                           >
+                             <UserX className="w-5 h-5" />
+                           </button>
+                         </div>
+                      </td>
+                    </motion.tr>
+                  ))}
+                  
+                  {activeQueue.filter(q => q.booked_time).length === 0 && (
+                     <tr>
+                        <td colSpan={4} className="px-8 py-20 text-center">
+                           <div className="w-16 h-16 bg-surface-container mx-auto rounded-full flex items-center justify-center mb-4">
+                              <span className="material-symbols-outlined text-on-surface-variant/50 text-3xl">event_available</span>
+                           </div>
+                           <p className="text-on-surface-variant font-bold">No upcoming bookings today.</p>
                         </td>
                      </tr>
                   )}
