@@ -1,16 +1,29 @@
 'use client'
 
-import { useEffect, useState } from 'react'
+import { useEffect, useState, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { createClient as supabase } from '@/utils/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
-import { Check, X, Shield, Bell, LayoutDashboard, Users, UserPlus, LogOut, Search, Activity, UserX, Menu } from 'lucide-react'
+import { Check, X, Shield, Bell, LayoutDashboard, Users, UserPlus, LogOut, Search, Activity, UserX, Menu, Calculator } from 'lucide-react'
+import AppSidebar from '@/components/AppSidebar'
 
-export default function AdminDashboard() {
+export default function AdminDashboardWrapper() {
+  return (
+     <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold">Loading...</div>}>
+        <AdminDashboard />
+     </Suspense>
+  )
+}
+
+function AdminDashboard() {
+  const searchParams = useSearchParams()
+  const initialTab = (searchParams.get('tab') as 'overview' | 'customers' | 'management' | 'users' | 'payroll') || 'overview'
+
   const [profile, setProfile] = useState<any>(null)
   const [loading, setLoading] = useState(true)
 
   const [sidebarOpen, setSidebarOpen] = useState(false)
-  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management' | 'users'>('overview')
+  const [activeTab, setActiveTab] = useState<'overview' | 'customers' | 'management' | 'users' | 'payroll'>(initialTab)
   
   // Data
   const [activeQueue, setActiveQueue] = useState<any[]>([])
@@ -52,12 +65,19 @@ export default function AdminDashboard() {
     return () => { if (channel) supabase().removeChannel(channel) }
   }, [])
 
+  useEffect(() => {
+    const t = searchParams.get('tab') as any
+    if (t) setActiveTab(t)
+    else setActiveTab('overview')
+  }, [searchParams])
+
   const checkAdmin = async () => {
      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
-         const role = localStorage.getItem('mock_role')
-         if (role !== 'admin') window.location.href = '/login'
-         else {
-             setProfile({ id: 'admin-123', name: 'Master Barber' })
+         const role = localStorage.getItem('mock_role') || 'owner'
+         if (role !== 'admin' && role !== 'owner' && role !== 'barber') {
+             window.location.href = '/login'
+         } else {
+             setProfile({ id: 'admin-123', name: role === 'owner' ? 'Shop Owner' : 'Master Barber', role })
              loadMockData()
              setLoading(false)
          }
@@ -68,8 +88,8 @@ export default function AdminDashboard() {
      if (!session) { window.location.href = '/login'; return }
      
      const { data } = await supabase().from('profiles').select('*').eq('id', session.user.id).single()
-     if (!data || data.role !== 'admin') {
-         window.location.href = '/dashboard' // Not an admin
+     if (!data || !['admin', 'owner', 'barber'].includes(data.role)) {
+         window.location.href = '/dashboard' // Not an authorized role
          return
      }
 
@@ -80,9 +100,9 @@ export default function AdminDashboard() {
 
   const loadMockData = () => {
       setActiveQueue([
-          { id: 'q1', queue_number: 14, status: 'WAITING', customer_name: 'Julian D.', phone_number: '60123456789' },
-          { id: 'q2', queue_number: 15, status: 'WAITING', customer_name: 'Marcus K.', phone_number: '60198765432' },
-          { id: 'q3', queue_number: 999, status: 'WAITING', customer_name: 'Syed (Booking)', phone_number: '60132273797', booked_time: '18:30' }
+          { id: 'q1', queue_number: 14, status: 'WAITING', customer_name: 'Julian D.', phone_number: '60123456789', joined_at: new Date(Date.now() - 40*60000).toISOString() },
+          { id: 'q2', queue_number: 15, status: 'WAITING', customer_name: 'Marcus K.', phone_number: '60198765432', joined_at: new Date(Date.now() - 15*60000).toISOString() },
+          { id: 'q3', queue_number: 999, status: 'WAITING', customer_name: 'Syed (Booking)', phone_number: '60132273797', booked_time: '18:30', joined_at: new Date().toISOString() }
       ])
       setHistory([
           { id: 'h1', status: 'COMPLETED', created_at: new Date().toISOString(), customer_name: 'John Doe' }
@@ -235,6 +255,17 @@ export default function AdminDashboard() {
      }
   }
 
+  const handleClearDefaultQueue = async () => {
+     if (window.confirm(`Clear all Walk-in tickets? This will cancel all currently waiting non-booking tickets.`)) {
+        if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+            setActiveQueue(prev => prev.filter(q => q.booked_time))
+            return
+        }
+        await supabase().from('queue_entries').update({ status: 'CANCELLED' }).in('status', ['WAITING', 'CALLED']).is('booked_time', null)
+        fetchData()
+     }
+  }
+
   const [isSaving, setIsSaving] = useState(false)
   const saveShopSettings = async (newSettings: any) => {
       setShopSettings(newSettings)
@@ -322,41 +353,14 @@ export default function AdminDashboard() {
          <div onClick={() => setSidebarOpen(false)} className="md:hidden fixed inset-0 bg-black/60 z-50 animate-in fade-in transition-all"></div>
       )}
 
-      {/* SideNavBar */}
-      <aside className={`fixed left-0 top-0 h-full w-64 flex-col pt-6 md:pt-24 pb-8 px-4 bg-white border-r border-outline-variant/10 shadow-xl transition-transform z-50 duration-300 flex md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <div className="flex justify-end md:hidden mb-2">
-           <button onClick={() => setSidebarOpen(false)} className="p-2 text-on-surface-variant hover:bg-surface rounded-full"><X className="w-5 h-5" /></button>
-        </div>
-        
-        <div className="flex items-center gap-3 px-4 mb-8">
-          <div className="w-12 h-12 rounded-2xl bg-[#004be2] flex items-center justify-center text-white shadow-sm overflow-hidden font-black text-xl border-2 border-white">
-             {profile?.name ? profile.name.substring(0,2).toUpperCase() : 'AD'}
-          </div>
-          <div>
-            <p className="font-headline font-bold tracking-tight text-on-surface text-lg">{profile?.name || 'Lot 5 Admin'}</p>
-            <p className="text-xs text-[#004be2] font-black uppercase tracking-widest bg-[#c5d0ff] px-2 rounded w-min mt-0.5">Console</p>
-          </div>
-        </div>
-        
-        <nav className="flex-1 space-y-2">
-          <button onClick={() => { setActiveTab('overview'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'overview' ? 'bg-[#e5f638] text-[#545b00] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
-            <LayoutDashboard className={`w-5 h-5 ${activeTab === 'overview' ? 'text-[#545b00]' : ''}`} />
-            <span className="tracking-wide">Queue Manager</span>
-          </button>
-          <button onClick={() => { setActiveTab('customers'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'customers' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
-            <Users className={`w-5 h-5 ${activeTab === 'customers' ? 'text-[#004be2]' : ''}`} />
-            <span className="tracking-wide">CRM Analytics</span>
-          </button>
-          <button onClick={() => { setActiveTab('management'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'management' ? 'bg-orange-100 text-orange-600 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
-            <Shield className={`w-5 h-5 ${activeTab === 'management' ? 'text-orange-600' : ''}`} />
-            <span className="tracking-wide">Shop Management</span>
-          </button>
-          <button onClick={() => { setActiveTab('users'); setSidebarOpen(false); }} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'users' ? 'bg-green-100 text-green-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
-            <UserPlus className={`w-5 h-5 ${activeTab === 'users' ? 'text-green-700' : ''}`} />
-            <span className="tracking-wide">User Access</span>
-          </button>
-        </nav>
-      </aside>
+      {/* SideNavBar via Component */}
+      <AppSidebar 
+         sidebarOpen={sidebarOpen} 
+         setSidebarOpen={setSidebarOpen} 
+         activeTab={activeTab} 
+         onTabChange={(tab) => setActiveTab(tab as any)} 
+         profile={profile} 
+      />
 
       {/* Main Content */}
       <main className="md:pl-64 pt-24 pb-32 px-4 md:px-8 min-h-screen max-w-[1500px] mx-auto animate-in fade-in duration-500">
@@ -388,9 +392,14 @@ export default function AdminDashboard() {
         <section className="bg-white rounded-[2rem] overflow-hidden shadow-sm border border-outline-variant/10">
           <div className="px-8 py-6 flex justify-between items-center bg-white border-b border-outline-variant/5">
             <h2 className="font-headline font-bold text-2xl text-on-surface">Queue Control</h2>
-            <span className="px-4 py-1.5 bg-[#c5d0ff] text-[#004be2] text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 shadow-sm border border-[#004be2]/10">
-               <span className="w-2 h-2 bg-[#004be2] rounded-full animate-pulse"></span> LIVE SYNC
-            </span>
+            <div className="flex items-center gap-3">
+              <button onClick={handleClearDefaultQueue} className="px-3 md:px-4 py-1.5 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-red-200 transition-colors shadow-sm hidden sm:block">
+                Clear List
+              </button>
+              <span className="px-4 py-1.5 bg-[#c5d0ff] text-[#004be2] text-[10px] font-black uppercase tracking-widest rounded-full flex items-center gap-2 shadow-sm border border-[#004be2]/10">
+                 <span className="w-2 h-2 bg-[#004be2] rounded-full animate-pulse"></span> LIVE SYNC
+              </span>
+            </div>
           </div>
           
           <div className="overflow-x-auto">
@@ -422,9 +431,19 @@ export default function AdminDashboard() {
                            </div>
                            <div>
                              <p className="font-bold text-on-surface text-base md:text-lg">{q.customer_name || q.profiles?.name || 'Customer'}</p>
-                             <span className={`font-black text-[9px] md:text-[10px] uppercase tracking-widest mt-1 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
+                             <span className={`font-black text-[9px] md:text-[10px] uppercase tracking-widest mt-1 mr-2 inline-block ${q.status === 'CALLED' ? 'text-[#e5f638] bg-[#545b00] px-3 py-1 rounded-full animate-pulse' : (i === 0 ? 'text-[#004be2]' : 'text-on-surface-variant')}`}>
                                 {q.status === 'CALLED' ? 'Summoned to chair' : (i === 0 ? 'Next Up' : 'Waiting in Lobby')}
                              </span>
+                             {q.joined_at && (
+                                <div className="flex items-center gap-2 mt-2">
+                                  <span className="font-bold text-[9px] text-on-surface-variant/80 tracking-widest uppercase bg-surface-container-high px-2 py-0.5 rounded-full inline-block border border-outline-variant/10">
+                                    Joined: {new Date(q.joined_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                                  </span>
+                                  <span className="font-bold text-[9px] text-orange-600/90 tracking-widest uppercase bg-orange-50 px-2 py-0.5 rounded-full inline-block border border-orange-200">
+                                    Waited: {Math.floor((Date.now() - new Date(q.joined_at).getTime()) / 60000)} mins
+                                  </span>
+                                </div>
+                             )}
                            </div>
                         </div>
                       </td>
@@ -867,7 +886,7 @@ export default function AdminDashboard() {
         </div>
         ) : null}
 
-         {activeTab === 'users' && (
+         {activeTab === 'users' && profile?.role === 'owner' && (
          <div className="space-y-8 animate-in fade-in slide-in-from-bottom-4 duration-500 max-w-6xl">
             <section className="bg-gradient-to-r from-green-100 to-green-50 p-8 md:p-10 rounded-[2rem] relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center border border-green-200/50 shadow-sm mb-10 gap-6">
                <div className="relative z-10 w-full md:w-auto">

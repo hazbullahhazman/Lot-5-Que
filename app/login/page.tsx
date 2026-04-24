@@ -23,6 +23,12 @@ export default function LoginPage() {
             if (email === 'admin@lot5.com') {
                 localStorage.setItem('mock_role', 'admin')
                 window.location.href = '/admin'
+            } else if (email === 'owner@lot5.com') {
+                localStorage.setItem('mock_role', 'owner')
+                window.location.href = '/owner'
+            } else if (email === 'barber@lot5.com') {
+                localStorage.setItem('mock_role', 'barber')
+                window.location.href = '/admin'
             } else {
                 localStorage.setItem('mock_role', 'user')
                 window.location.href = '/dashboard'
@@ -118,9 +124,6 @@ export default function LoginPage() {
           <p className="mt-8 text-center text-sm font-medium text-on-surface-variant">
             Don&apos;t have an account? <a href="/register" className="text-[#004be2] font-bold hover:underline transition-all">Sign up here</a>
           </p>
-          <div className="mt-4 pt-4 border-t border-outline-variant/10 text-center">
-             <p className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant/50">Admin demo: admin@lot5.com</p>
-          </div>
         </div>
       </motion.div>
     </div>

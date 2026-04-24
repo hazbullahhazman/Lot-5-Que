@@ -263,15 +263,11 @@ export default function UserDashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f8fcfd]"><div className="w-10 h-10 border-4 border-outline-variant/20 border-t-[#004be2] rounded-full animate-spin"></div></div>
 
   // Math
-  const myQueueIndex = activeQueue.findIndex(q => q.queue_number === myTicket?.queue_number)
-  const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0
-  const myWaitTimeMins = Math.ceil((peopleAhead * 30) / activeWalkInBarbers) 
-
-  let positionDisplay = peopleAhead + 1; 
-  let positionSuffix = "TH";
-  if (positionDisplay === 1) positionSuffix = "ST";
-  else if (positionDisplay === 2) positionSuffix = "ND";
-  else if (positionDisplay === 3) positionSuffix = "RD";
+  const walkInActiveQueue = activeQueue.filter(q => !q.booked_time);
+  const myQueueIndex = walkInActiveQueue.findIndex(q => q.id === myTicket?.id);
+  const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
+  const myWaitTimeMins = Math.ceil((peopleAhead * 30) / activeWalkInBarbers);
+  const currentServingNumber = walkInActiveQueue.length > 0 ? walkInActiveQueue[0].queue_number : (myTicket ? myTicket.queue_number : '--');
 
   return (
     <div className="min-h-screen text-on-surface font-body bg-[#f8fcfd] selection:bg-primary-container selection:text-on-primary-container pb-24">
@@ -333,7 +329,17 @@ export default function UserDashboard() {
                                <span className="material-symbols-outlined text-4xl">content_cut</span>
                             </div>
                             <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface mb-4">Ready for a fresh cut?</h1>
-                            <p className="text-on-surface-variant font-medium mb-10 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn. Currently, there are <span className="font-extrabold text-[#004be2]">{activeQueue.filter((q: any) => !q.booked_time).length}</span> people waiting.</p>
+                            <p className="text-on-surface-variant font-medium mb-6 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn.</p>
+                            
+                            <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-4 px-6 mb-10 inline-flex items-center gap-4 shadow-sm mx-auto">
+                              <div className="w-10 h-10 rounded-full bg-[#e5f638] text-[#545b00] flex items-center justify-center font-black font-headline text-xl shadow-inner">
+                                {activeQueue.filter((q: any) => !q.booked_time).length}
+                              </div>
+                              <div className="text-left leading-tight">
+                                <span className="font-bold text-[#545b00] block">People currently</span>
+                                <span className="font-black text-[#545b00] text-sm uppercase tracking-widest">Waiting in Queue</span>
+                              </div>
+                            </div>
                             
                             <button onClick={handleJoinQueue} className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3">
                                Join the Queue <ArrowRight className="w-5 h-5" />
@@ -411,12 +417,11 @@ export default function UserDashboard() {
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                            {/* Position */}
                            <div className="bg-[#c5d0ff] rounded-[2rem] p-8 md:p-10 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
-                              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-4">Your Position</span>
+                              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-4">Your Ticket</span>
                               <div className="relative">
-                                <span className="font-headline text-[7rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">{positionDisplay}</span>
-                                <span className="font-headline text-2xl font-bold text-[#004be2]/60 absolute top-4 -right-14">{positionSuffix}</span>
+                                <span className="font-headline text-[7rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">#{myTicket.queue_number}</span>
                               </div>
-                              <p className="mt-6 font-body font-bold text-[#004be2]/80 uppercase tracking-widest text-xs">In The Queue</p>
+                              <p className="mt-6 font-body font-bold text-[#004be2]/80 uppercase tracking-widest text-xs">Currently Serving: #{currentServingNumber}</p>
                            </div>
 
                            {/* Est Time */}
