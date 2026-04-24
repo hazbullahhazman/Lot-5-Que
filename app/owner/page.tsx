@@ -100,7 +100,7 @@ function OwnerDashboard() {
     }
 
     try {
-      const b = await supabase().from('barbers').select('*')
+      const b = await supabase().from('profiles').select('*').in('role', ['barber', 'owner', 'admin'])
       if (b.data) setBarbers(b.data)
 
       const t = await supabase().from('transactions').select('*').order('created_at', { ascending: false })

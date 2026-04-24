@@ -1,21 +1,41 @@
 -- Supabase Schema Migration v5
 -- Target: Extend pricing_config and addon_items for dynamic commission tracking
 
--- Step 1: Add new columns to pricing_config
+-- Step 1: Ensure pricing_config exists
+CREATE TABLE IF NOT EXISTS public.pricing_config (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  service_type text UNIQUE NOT NULL,
+  base_price numeric(10,2) NOT NULL,
+  updated_at timestamp with time zone DEFAULT timezone('utc'::text, now()) NOT NULL
+);
+
+-- Add new columns to pricing_config safely
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pricing_config' AND column_name='commission_type') THEN
         ALTER TABLE public.pricing_config ADD COLUMN commission_type text DEFAULT 'fixed' CHECK (commission_type IN ('fixed', 'percentage'));
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='pricing_config' AND column_name='barber_cut') THEN
         ALTER TABLE public.pricing_config ADD COLUMN barber_cut numeric(10,2) DEFAULT 0.00;
     END IF;
 END $$;
 
--- Step 2: Add new columns to addon_items
+-- Step 2: Ensure addon_items exists
+CREATE TABLE IF NOT EXISTS public.addon_items (
+  id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
+  name text UNIQUE NOT NULL,
+  price numeric(10,2) NOT NULL,
+  active boolean DEFAULT true
+);
+
+-- Add new columns to addon_items safely
 DO $$ 
 BEGIN
     IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='addon_items' AND column_name='commission_type') THEN
         ALTER TABLE public.addon_items ADD COLUMN commission_type text DEFAULT 'percentage' CHECK (commission_type IN ('fixed', 'percentage'));
-        ALTER TABLE public.addon_items ADD COLUMN barber_cut numeric(10,2) DEFAULT 50.00; -- Default 50%
+    END IF;
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='addon_items' AND column_name='barber_cut') THEN
+        ALTER TABLE public.addon_items ADD COLUMN barber_cut numeric(10,2) DEFAULT 50.00;
     END IF;
 END $$;
 

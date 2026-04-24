@@ -38,7 +38,7 @@ export default function BarberStats() {
      }
 
      setProfile(data)
-     fetchData(data.barber_id)
+     fetchData(data.id)
   }
 
   const fetchData = async (barberId: string) => {

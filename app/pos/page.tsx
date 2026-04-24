@@ -138,11 +138,10 @@ export default function POSSystem() {
 
   const totalAmount = subtotal + tips
 
-  const isFormValid = selectedCustomer && selectedBarber && selectedService && paymentMethod
+  const isFormValid = selectedCustomer && selectedService && paymentMethod
 
   const handleReset = () => {
       setSelectedCustomer(null)
-      setSelectedBarber('')
       setSelectedService(null)
       setSelectedAddons([])
       setTips(0)
@@ -152,8 +151,6 @@ export default function POSSystem() {
   const handleSubmitTransaction = async () => {
       if (!isFormValid) return
       setIsSubmitting(true)
-
-      const barberData = barbers.find(b => b.id === selectedBarber)
       
       let commissionAmount = 0;
       
@@ -185,15 +182,17 @@ export default function POSSystem() {
           tips,
           total: totalAmount,
           payment_method: paymentMethod,
-          barber_id: barberData.id,
-          barber_name: barberData.name,
+          barber_id: profile?.id,
+          barber_name: profile?.name,
           commission_amount: commissionAmount,
           status: 'COMPLETED'
       }
 
       if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
          // 1. Insert Transaction
-         await supabase().from('transactions').insert([transactionPayload])
+         const { error: txError } = await supabase().from('transactions').insert([transactionPayload])
+         if (txError) console.error("Transaction Insert Error:", txError)
+         
          // 2. Mark queue as completed
          await supabase().from('queue_entries').update({ status: 'COMPLETED' }).eq('id', selectedCustomer.id)
       } else {
@@ -283,28 +282,16 @@ export default function POSSystem() {
                )}
             </section>
 
-            {/* 1B. Barber Selector */}
+            {/* 1B. Barber Display */}
             <section className={`bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-outline-variant/10 transition-opacity duration-300 ${!selectedCustomer ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                <h2 className="text-sm font-black uppercase tracking-widest text-[#004be2] mb-4 flex items-center gap-2">
                  <Scissors className="w-4 h-4"/> 2. Served By
                </h2>
-               <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-                  {barbers.map(barber => (
-                      <button 
-                         key={barber.id}
-                         onClick={() => setSelectedBarber(barber.id)}
-                         className={`py-3 px-4 rounded-xl border-2 font-bold text-sm flex items-center gap-3 transition-all ${
-                             selectedBarber === barber.id 
-                               ? 'border-[#004be2] bg-[#c5d0ff] text-[#004be2] shadow-sm' 
-                               : 'border-transparent bg-surface-container text-on-surface hover:bg-surface-container-high'
-                         }`}
-                      >
-                         <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-black text-[10px] text-black">
-                            {barber.name.substring(0, 1)}
-                         </div>
-                         {barber.name}
-                      </button>
-                  ))}
+               <div className="py-3 px-4 rounded-xl border-2 border-[#004be2] bg-[#c5d0ff] text-[#004be2] shadow-sm font-bold text-sm flex items-center gap-3 w-max">
+                  <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-black text-[10px] text-black">
+                     {profile?.name ? profile.name.substring(0, 1) : 'U'}
+                  </div>
+                  {profile?.name || 'Loading...'}
                </div>
             </section>
 
@@ -417,7 +404,7 @@ export default function POSSystem() {
                   <div className="flex justify-between"><span className="opacity-60">Queue No:</span> <strong>{selectedCustomer ? `#${selectedCustomer.queue_number}` : '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Customer:</span> <strong>{selectedCustomer?.customer_name || '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Date:</span> <strong>{new Date().toLocaleDateString('en-MY')}</strong></div>
-                  <div className="flex justify-between"><span className="opacity-60">Served By:</span> <strong>{barbers.find(b=>b.id === selectedBarber)?.name || '--'}</strong></div>
+                  <div className="flex justify-between"><span className="opacity-60">Served By:</span> <strong>{profile?.name || '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Status:</span> <strong>{paymentMethod ? paymentMethod.toUpperCase() : 'PENDING'}</strong></div>
                </div>
 
