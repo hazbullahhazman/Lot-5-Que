@@ -296,7 +296,7 @@ export default function POSSystem() {
             </section>
 
             {/* 1C & 1D. Services and Addons */}
-            <section className={`bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-outline-variant/10 transition-opacity duration-300 ${!selectedBarber ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
+            <section className={`bg-white p-6 md:p-8 rounded-[2rem] shadow-sm border border-outline-variant/10 transition-opacity duration-300 ${!selectedCustomer ? 'opacity-50 pointer-events-none' : 'opacity-100'}`}>
                <h2 className="text-sm font-black uppercase tracking-widest text-[#004be2] mb-4">3. Service & Items</h2>
                
                <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-3">Base Service (Required)</p>

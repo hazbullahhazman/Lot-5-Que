@@ -65,27 +65,37 @@ export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onT
       <nav className="flex-1 space-y-2 overflow-y-auto pr-2">
         {(profile?.role === 'admin' || profile?.role === 'barber' || profile?.role === 'owner') && (
             <>
+              {/* 1. Queue Manager */}
               <button onClick={() => handleNav('overview')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'overview' ? 'bg-[#e5f638] text-[#545b00] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                 <LayoutDashboard className={`w-5 h-5 ${activeTab === 'overview' ? 'text-[#545b00]' : ''}`} />
                 <span className="tracking-wide">Queue Manager</span>
               </button>
+
+              {/* 2. Launch POS */}
+              <button onClick={() => handleNav('pos', '/pos')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'pos' ? 'bg-[#c5ff50] text-[#4d6600] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+                <Calculator className={`w-5 h-5 ${activeTab === 'pos' ? 'text-[#4d6600]' : ''}`} />
+                <span className="tracking-wide">Launch POS</span>
+              </button>
+
+              {/* 3. My Performance */}
+              <button onClick={() => handleNav('my-stats', '/my-stats')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'my-stats' ? 'bg-surface-container-highest text-on-surface scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+                <Activity className={`w-5 h-5 ${activeTab === 'my-stats' ? 'text-on-surface' : ''}`} />
+                <span className="tracking-wide">My Performance</span>
+              </button>
+
+              {/* Dashboard & CRM (Kept just in case) */}
               <button onClick={() => handleNav('customers')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'customers' ? 'bg-[#c5d0ff] text-[#004be2] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                 <Users className={`w-5 h-5 ${activeTab === 'customers' ? 'text-[#004be2]' : ''}`} />
                 <span className="tracking-wide">{profile?.role === 'owner' ? 'Dashboard & CRM' : 'CRM Analytics'}</span>
               </button>
-              
-              {profile?.role === 'owner' && (
-                 <button onClick={() => handleNav('payroll')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'payroll' ? 'bg-purple-100 text-purple-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
-                   <Banknote className={`w-5 h-5 ${activeTab === 'payroll' ? 'text-purple-700' : ''}`} />
-                   <span className="tracking-wide">Payroll & Comm.</span>
-                 </button>
-              )}
 
+              {/* 4. Shop Management */}
               <button onClick={() => handleNav('management')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'management' ? 'bg-orange-100 text-orange-600 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                 <Shield className={`w-5 h-5 ${activeTab === 'management' ? 'text-orange-600' : ''}`} />
                 <span className="tracking-wide">Shop Management</span>
               </button>
               
+              {/* 5. User Access */}
               {profile?.role === 'owner' && (
                  <button onClick={() => handleNav('users')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'users' ? 'bg-green-100 text-green-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                    <UserPlus className={`w-5 h-5 ${activeTab === 'users' ? 'text-green-700' : ''}`} />
@@ -93,26 +103,23 @@ export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onT
                  </button>
               )}
 
+              {/* 6. Pricing & Services */}
               {profile?.role === 'owner' && (
                  <button onClick={() => handleNav('pricing')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'pricing' ? 'bg-indigo-100 text-indigo-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                    <Tags className={`w-5 h-5 ${activeTab === 'pricing' ? 'text-indigo-700' : ''}`} />
                    <span className="tracking-wide">Pricing & Services</span>
                  </button>
               )}
+
+              {/* 7. Payroll & Comm. */}
+              {profile?.role === 'owner' && (
+                 <button onClick={() => handleNav('payroll')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'payroll' ? 'bg-purple-100 text-purple-700 scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+                   <Banknote className={`w-5 h-5 ${activeTab === 'payroll' ? 'text-purple-700' : ''}`} />
+                   <span className="tracking-wide">Payroll & Comm.</span>
+                 </button>
+              )}
             </>
         )}
-        
-        {/* Core utilities accessible to all staff */}
-        <div className="pt-4 mt-2 border-t border-outline-variant/10 space-y-2">
-           <button onClick={() => handleNav('my-stats', '/my-stats')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none border hover:scale-[1.02] shadow-sm font-bold ${activeTab === 'my-stats' ? 'bg-surface-container-highest text-on-surface border-outline-variant/30' : 'bg-surface-container text-on-surface border-outline-variant/10'}`}>
-             <Activity className="w-5 h-5 text-on-surface-variant" />
-             <span className="tracking-wide text-sm">My Performance</span>
-           </button>
-           <button onClick={() => handleNav('pos', '/pos')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none border hover:scale-[1.02] shadow-sm font-black ${activeTab === 'pos' ? 'bg-[#c5ff50] text-[#4d6600] border-[#c5ff50]/10' : 'bg-[#e5f638] text-[#545b00] border-[#545b00]/10'}`}>
-             <Calculator className="w-5 h-5" />
-             <span className="tracking-wide">Launch POS</span>
-           </button>
-        </div>
       </nav>
     </aside>
   )
