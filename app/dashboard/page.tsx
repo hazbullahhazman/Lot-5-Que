@@ -307,6 +307,19 @@ export default function UserDashboard() {
                     <div className="absolute -right-20 -top-20 w-64 h-64 bg-[#e5f638]/20 rounded-full blur-3xl mix-blend-multiply pointer-events-none"></div>
                     <div className="absolute -left-20 -bottom-20 w-64 h-64 bg-[#c5d0ff]/20 rounded-full blur-3xl mix-blend-multiply pointer-events-none"></div>
                     
+                    {/* Floating Background Icons */}
+                    <div className="absolute inset-0 pointer-events-none overflow-hidden opacity-[0.03] select-none">
+                      <span className="material-symbols-outlined absolute top-10 left-[10%] text-6xl rotate-12">content_cut</span>
+                      <span className="material-symbols-outlined absolute top-32 right-[15%] text-7xl -rotate-12">brush</span>
+                      <span className="material-symbols-outlined absolute bottom-24 left-[15%] text-5xl rotate-45">straighten</span>
+                      <span className="material-symbols-outlined absolute bottom-12 right-[10%] text-6xl rotate-[-20deg]">face</span>
+                      <span className="material-symbols-outlined absolute top-[40%] left-[5%] text-4xl">stars</span>
+                      <span className="material-symbols-outlined absolute top-[50%] right-[8%] text-5xl rotate-12">dry_cleaning</span>
+                      <span className="material-symbols-outlined absolute bottom-[40%] left-[8%] text-3xl">water_drop</span>
+                      <span className="material-symbols-outlined absolute top-[20%] left-[20%] text-2xl">close</span>
+                      <span className="material-symbols-outlined absolute bottom-[30%] right-[20%] text-3xl">circle</span>
+                    </div>
+                    
                     <div className="relative z-10 max-w-lg mx-auto">
                       
                       {/* Segmented Control */}
@@ -331,13 +344,38 @@ export default function UserDashboard() {
                             <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface mb-4">Ready for a fresh cut?</h1>
                             <p className="text-on-surface-variant font-medium mb-6 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn.</p>
                             
-                            <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-4 px-6 mb-10 inline-flex items-center gap-4 shadow-sm mx-auto">
-                              <div className="w-10 h-10 rounded-full bg-[#e5f638] text-[#545b00] flex items-center justify-center font-black font-headline text-xl shadow-inner">
-                                {activeQueue.filter((q: any) => !q.booked_time).length}
+                            <div className="grid grid-cols-3 gap-3 mb-10 mx-auto w-full">
+                              {/* 1. Estimate time waiting */}
+                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
+                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00] flex items-baseline gap-1">
+                                  {Math.ceil((activeQueue.filter((q: any) => !q.booked_time).length * 30) / activeWalkInBarbers)} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
+                                </div>
+                                <div className="leading-tight mt-1">
+                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Estimated</span>
+                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">Wait Time</span>
+                                </div>
                               </div>
-                              <div className="text-left leading-tight">
-                                <span className="font-bold text-[#545b00] block">People currently</span>
-                                <span className="font-black text-[#545b00] text-sm uppercase tracking-widest">Waiting in Queue</span>
+
+                              {/* 2. Current people waiting */}
+                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
+                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
+                                  {activeQueue.filter((q: any) => !q.booked_time).length}
+                                </div>
+                                <div className="leading-tight mt-1">
+                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">People</span>
+                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">Waiting</span>
+                                </div>
+                              </div>
+
+                              {/* 3. Barber on Duty */}
+                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
+                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
+                                  {activeWalkInBarbers}
+                                </div>
+                                <div className="leading-tight mt-1">
+                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Barbers</span>
+                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">On Duty</span>
+                                </div>
                               </div>
                             </div>
                             
