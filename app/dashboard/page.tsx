@@ -397,7 +397,6 @@ export default function UserDashboard() {
                                 </div>
                               </div>
                             </div>
-                            </div>
                             
                             <div className="bg-white p-4 rounded-2xl border border-outline-variant/10 shadow-sm mb-6 text-left">
                                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 block">Haircut Style</label>
