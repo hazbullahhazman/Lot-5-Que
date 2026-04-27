@@ -298,7 +298,7 @@ function OwnerDashboard() {
                     <p className={`text-[10px] font-black uppercase tracking-widest mb-3 ${card.bg ? 'text-[#545b00]' : 'text-on-surface-variant'}`}>{card.label}</p>
                     <div className="flex items-end gap-2">
                        <h3 className={`font-headline text-3xl md:text-4xl font-black tracking-tighter ${card.primary ? 'text-on-surface' : card.bg ? 'text-[#545b00]' : 'text-[#545b00]'}`}>
-                          ${card.value.toFixed(2)}
+                          RM {card.value.toFixed(2)}
                        </h3>
                        {card.diff && (
                           <span className={`text-[10px] font-bold mb-1 flex items-center ${card.up ? 'text-green-600' : 'text-red-500'}`}>
@@ -361,7 +361,7 @@ function OwnerDashboard() {
                            </div>
                         </div>
                         <div className="text-right">
-                           <p className="font-black text-sm text-on-surface leading-tight">${Number(t.total).toFixed(2)}</p>
+                           <p className="font-black text-sm text-on-surface leading-tight">RM {Number(t.total).toFixed(2)}</p>
                            <p className="text-[10px] font-medium text-on-surface-variant">{new Date(t.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</p>
                         </div>
                      </div>
@@ -415,12 +415,12 @@ function OwnerDashboard() {
                                   </div>
                                </td>
                                <td className="py-4 text-center font-bold text-sm">{cuts}</td>
-                               <td className="py-4 text-center font-black text-sm">${gross.toFixed(2)}</td>
-                               <td className="py-4 text-center text-sm"><span className="text-[#004be2] font-bold bg-[#c5d0ff]/30 px-3 py-1 rounded-full">${comm.toFixed(2)} ({(b.commission_rate * 100).toFixed(0)}%)</span></td>
-                               <td className="py-4 text-center text-sm font-medium text-on-surface-variant">${tips.toFixed(2)}</td>
+                               <td className="py-4 text-center font-black text-sm">RM {gross.toFixed(2)}</td>
+                               <td className="py-4 text-center text-sm"><span className="text-[#004be2] font-bold bg-[#c5d0ff]/30 px-3 py-1 rounded-full">RM {comm.toFixed(2)} ({(b.commission_rate * 100).toFixed(0)}%)</span></td>
+                               <td className="py-4 text-center text-sm font-medium text-on-surface-variant">RM {tips.toFixed(2)}</td>
                                <td className="py-4 text-right">
                                   <span className="bg-[#e5f638] text-[#545b00] font-black px-4 py-1.5 rounded-xl shadow-sm border border-[#545b00]/10">
-                                     ${(comm + tips).toFixed(2)}
+                                     RM {(comm + tips).toFixed(2)}
                                   </span>
                                </td>
                             </tr>

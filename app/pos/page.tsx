@@ -196,7 +196,12 @@ export default function POSSystem() {
       if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
          // 1. Insert Transaction
          const { error: txError } = await supabase().from('transactions').insert([transactionPayload])
-         if (txError) console.error("Transaction Insert Error:", txError)
+         if (txError) {
+             console.error("Transaction Insert Error:", txError)
+             alert(`Failed to save transaction: ${txError.message}\nDetails: ${txError.details || ''}`)
+             setIsSubmitting(false)
+             return
+         }
          
          // 2. Mark queue as completed
          await supabase().from('queue_entries').update({ status: 'COMPLETED' }).eq('id', selectedCustomer.id)
@@ -271,18 +276,37 @@ export default function POSSystem() {
                       </div>
                    </div>
                ) : (
-                   <div className="border-2 border-dashed border-outline-variant/20 rounded-2xl p-8 text-center text-on-surface-variant focus-within:bg-[#f8fcfd]">
-                      <p className="font-bold text-sm">No customer loaded.</p>
-                      <p className="text-xs mt-1 opacity-70">Search to load customer details.</p>
-                      
-                      {/* Mini manual quick select for prototype */}
-                      <div className="flex flex-wrap justify-center gap-2 mt-4">
-                         {activeQueue.map(q => (
-                             <button key={q.id} onClick={() => setSelectedCustomer(q)} className="bg-surface border border-outline-variant/10 hover:border-[#004be2]/30 px-3 py-1.5 rounded-lg text-xs font-bold hover:bg-[#c5d0ff]/20 transition-all font-body text-on-surface">
-                                #{q.queue_number} {q.customer_name?.split(' ')[0]}
-                             </button>
-                         ))}
+                   <div className="border border-outline-variant/20 rounded-2xl p-4 text-left text-on-surface focus-within:bg-[#f8fcfd]">
+                      <div className="flex justify-between items-center mb-4">
+                         <h3 className="font-bold text-sm">Active Queue</h3>
+                         <span className="text-[10px] bg-surface-container-high px-2 py-1 rounded font-bold uppercase tracking-widest opacity-70">Click to Select</span>
                       </div>
+                      {activeQueue.length === 0 ? (
+                          <div className="text-center py-8 opacity-70">
+                             <p className="text-xs">No customers currently waiting.</p>
+                          </div>
+                      ) : (
+                          <div className="overflow-x-auto">
+                              <table className="w-full text-left text-sm">
+                                  <thead className="text-[10px] uppercase tracking-widest text-on-surface-variant border-b border-outline-variant/10">
+                                      <tr>
+                                          <th className="py-2 px-3">No.</th>
+                                          <th className="py-2 px-3">Name</th>
+                                          <th className="py-2 px-3">Phone</th>
+                                      </tr>
+                                  </thead>
+                                  <tbody className="divide-y divide-outline-variant/5">
+                                      {activeQueue.map(q => (
+                                          <tr key={q.id} onClick={() => setSelectedCustomer(q)} className="hover:bg-surface-container-high cursor-pointer transition-colors group">
+                                              <td className="py-3 px-3 font-black text-[#545b00]">#{q.queue_number}</td>
+                                              <td className="py-3 px-3 font-bold group-hover:text-[#004be2]">{q.customer_name}</td>
+                                              <td className="py-3 px-3 text-on-surface-variant font-medium text-xs">{q.phone_number || 'N/A'}</td>
+                                          </tr>
+                                      ))}
+                                  </tbody>
+                              </table>
+                          </div>
+                      )}
                    </div>
                )}
             </section>

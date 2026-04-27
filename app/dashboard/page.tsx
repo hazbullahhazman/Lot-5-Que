@@ -19,6 +19,8 @@ export default function UserDashboard() {
   const [activeQueue, setActiveQueue] = useState<any[]>([]) 
   const [queueMode, setQueueMode] = useState<'walk-in' | 'booking'>('walk-in')
   const [selectedSlot, setSelectedSlot] = useState<string | null>(null)
+  const [serviceType, setServiceType] = useState<string>('Tape Fade')
+  const [remark, setRemark] = useState<string>('')
   
   // Shop Settings Logic
   const [shopSettings, setShopSettings] = useState({
@@ -155,11 +157,28 @@ export default function UserDashboard() {
          return
      }
 
-     const walkInQueue = activeQueue.filter((q: any) => q.queue_number < 999)
-     const nextTicketNumber = walkInQueue.length > 0 ? walkInQueue[walkInQueue.length - 1].queue_number + 1 : currentServing + 1
+     const today = new Date()
+     today.setHours(0, 0, 0, 0)
+     const todayIso = today.toISOString()
+     
+     let nextTicketNumber = 1
+     const { data: qnData } = await supabase()
+         .from('queue_entries')
+         .select('queue_number')
+         .gte('joined_at', todayIso)
+         .lt('queue_number', 999)
+         .order('queue_number', { ascending: false })
+         .limit(1)
+         
+     if (qnData && qnData.length > 0) {
+         nextTicketNumber = qnData[0].queue_number + 1
+     }
+
+     const finalName = remark ? `${profile?.name} - ${serviceType} (${remark})` : `${profile?.name} - ${serviceType}`
+
      const { data, error } = await supabase().from('queue_entries').insert([{
          user_id: profile?.id,
-         customer_name: profile?.name,
+         customer_name: finalName,
          phone_number: profile?.phone,
          queue_number: nextTicketNumber,
          status: 'WAITING'
@@ -378,7 +397,34 @@ export default function UserDashboard() {
                                 </div>
                               </div>
                             </div>
+                            </div>
                             
+                            <div className="bg-white p-4 rounded-2xl border border-outline-variant/10 shadow-sm mb-6 text-left">
+                               <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 block">Haircut Style</label>
+                               <select 
+                                 value={serviceType}
+                                 onChange={(e) => setServiceType(e.target.value)}
+                                 className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none mb-4 focus:border-[#004be2]"
+                               >
+                                  <option value="Tape Fade">Tape Fade</option>
+                                  <option value="Undercut">Undercut</option>
+                                  <option value="Low Fade">Low Fade</option>
+                                  <option value="Mid Fade">Mid Fade</option>
+                                  <option value="High Fade">High Fade</option>
+                                  <option value="Burst Fade">Burst Fade</option>
+                                  <option value="Other">Other</option>
+                               </select>
+                               
+                               <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 block">Remarks (Optional)</label>
+                               <input 
+                                 type="text"
+                                 value={remark}
+                                 onChange={(e) => setRemark(e.target.value)}
+                                 placeholder="Any specific requests?"
+                                 className="w-full bg-surface-container-lowest border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2]"
+                               />
+                            </div>
+
                             <button onClick={handleJoinQueue} className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3">
                                Join the Queue <ArrowRight className="w-5 h-5" />
                             </button>

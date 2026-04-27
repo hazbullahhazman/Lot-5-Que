@@ -266,6 +266,51 @@ function AdminDashboard() {
      }
   }
 
+  const [showWalkInModal, setShowWalkInModal] = useState(false)
+
+  const handleAddWalkIn = async (e: React.FormEvent) => {
+      e.preventDefault()
+      const formData = new FormData(e.target as HTMLFormElement)
+      const name = formData.get('name') as string
+      const phone = formData.get('phone') as string
+      const service = formData.get('service') as string
+      const remark = formData.get('remark') as string
+
+      const finalName = remark ? `${name} - ${service} (${remark})` : `${name} - ${service}`
+
+      const today = new Date()
+      today.setHours(0, 0, 0, 0)
+      const todayIso = today.toISOString()
+      
+      let nextTicketNumber = 1
+      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
+         const walkInQueue = activeQueue.filter((q: any) => q.queue_number < 999)
+         nextTicketNumber = walkInQueue.length > 0 ? walkInQueue[walkInQueue.length - 1].queue_number + 1 : 1
+         setActiveQueue(prev => [...prev, { id: Date.now().toString(), queue_number: nextTicketNumber, status: 'WAITING', customer_name: finalName, phone_number: phone, joined_at: new Date().toISOString() }])
+      } else {
+         const { data: qnData } = await supabase()
+             .from('queue_entries')
+             .select('queue_number')
+             .gte('joined_at', todayIso)
+             .lt('queue_number', 999)
+             .order('queue_number', { ascending: false })
+             .limit(1)
+             
+         if (qnData && qnData.length > 0) {
+             nextTicketNumber = qnData[0].queue_number + 1
+         }
+         
+         await supabase().from('queue_entries').insert([{
+             customer_name: finalName,
+             phone_number: phone,
+             queue_number: nextTicketNumber,
+             status: 'WAITING'
+         }])
+         fetchData()
+      }
+      setShowWalkInModal(false)
+  }
+
   const [isSaving, setIsSaving] = useState(false)
   const saveShopSettings = async (newSettings: any) => {
       setShopSettings(newSettings)
@@ -381,7 +426,7 @@ function AdminDashboard() {
              </div>
              <div className="bg-white/80 backdrop-blur-md px-6 py-4 rounded-3xl shadow-sm text-center flex-1 border border-white/50">
                 <p className="text-[10px] uppercase font-black tracking-widest text-[#004be2]/60 mb-1">Today Sales</p>
-                <p className="font-headline font-black text-3xl text-[#004be2]">${metrics.todaySales}</p>
+                <p className="font-headline font-black text-3xl text-[#004be2]">RM {metrics.todaySales}</p>
              </div>
            </div>
 
@@ -393,6 +438,9 @@ function AdminDashboard() {
           <div className="px-8 py-6 flex justify-between items-center bg-white border-b border-outline-variant/5">
             <h2 className="font-headline font-bold text-2xl text-on-surface">Queue Control</h2>
             <div className="flex items-center gap-3">
+              <button onClick={() => setShowWalkInModal(true)} className="px-3 md:px-4 py-1.5 bg-[#e5f638] text-[#545b00] hover:scale-105 rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest transition-transform shadow-sm flex items-center gap-1">
+                <UserPlus className="w-3 h-3" /> Add Walk-in
+              </button>
               <button onClick={handleClearDefaultQueue} className="px-3 md:px-4 py-1.5 bg-red-50 text-red-600 hover:bg-red-500 hover:text-white rounded-full text-[9px] md:text-[10px] font-black uppercase tracking-widest border border-red-200 transition-colors shadow-sm hidden sm:block">
                 Clear List
               </button>
@@ -619,8 +667,8 @@ function AdminDashboard() {
             <div className="bg-[#004be2] text-white p-8 rounded-[2rem] flex flex-col items-start shadow-xl shadow-[#004be2]/20 relative overflow-hidden border border-[#c5d0ff]/20 hover:scale-[1.01] transition-transform">
                <span className="text-[10px] font-black uppercase tracking-widest text-[#c5d0ff] mb-2 z-10 w-full flex justify-between">Today's Transactions <Activity className="w-4 h-4"/></span>
                <div className="flex items-baseline gap-2 z-10 mt-auto">
-                 <span className="font-headline text-6xl font-black tracking-tighter leading-none">${metrics.todaySales}</span>
-                 <span className="font-headline text-lg font-bold text-[#c5d0ff]">USD</span>
+                 <span className="font-headline text-6xl font-black tracking-tighter leading-none">RM {metrics.todaySales}</span>
+                 <span className="font-headline text-lg font-bold text-[#c5d0ff]">RM</span>
                </div>
                <span className="material-symbols-outlined text-[8rem] text-[#c5d0ff]/10 absolute -bottom-6 -right-4 rotate-[-15deg] pointer-events-none" style={{ fontVariationSettings: "'FILL' 1" }}>monetization_on</span>
             </div>
@@ -945,6 +993,47 @@ function AdminDashboard() {
             </section>
          </div>
          )}
+
+        {showWalkInModal && (
+           <div className="fixed inset-0 z-[60] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+              <div className="bg-white rounded-[2rem] p-8 max-w-md w-full shadow-2xl animate-in fade-in zoom-in duration-200">
+                 <h3 className="font-headline font-black text-2xl mb-2 text-[#004be2]">Add Walk-in Customer</h3>
+                 <p className="text-sm font-medium text-on-surface-variant mb-6">Create a queue entry for a customer without a smartphone account.</p>
+                 
+                 <form onSubmit={handleAddWalkIn} className="space-y-4">
+                    <div>
+                       <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2 block">Customer Name</label>
+                       <input name="name" type="text" placeholder="e.g. John Doe" required className="w-full bg-surface border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2]" />
+                    </div>
+                    <div>
+                       <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2 block">Phone Number (Optional)</label>
+                       <input name="phone" type="tel" placeholder="e.g. 0123456789" className="w-full bg-surface border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2]" />
+                    </div>
+                    <div>
+                       <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2 block">Haircut Style</label>
+                       <select name="service" className="w-full bg-surface border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2]">
+                          <option value="Tape Fade">Tape Fade</option>
+                          <option value="Undercut">Undercut</option>
+                          <option value="Low Fade">Low Fade</option>
+                          <option value="Mid Fade">Mid Fade</option>
+                          <option value="High Fade">High Fade</option>
+                          <option value="Burst Fade">Burst Fade</option>
+                          <option value="Other">Other</option>
+                       </select>
+                    </div>
+                    <div>
+                       <label className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mb-2 block">Remarks (Optional)</label>
+                       <input name="remark" type="text" placeholder="Any specific requests?" className="w-full bg-surface border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2]" />
+                    </div>
+                    
+                    <div className="flex gap-4 pt-4">
+                       <button type="button" onClick={() => setShowWalkInModal(false)} className="flex-1 py-3 font-bold text-sm bg-surface-container rounded-xl hover:bg-surface-container-high transition-colors text-on-surface cursor-pointer">Cancel</button>
+                       <button type="submit" className="flex-1 py-3 font-bold text-sm bg-[#e5f638] text-[#545b00] rounded-xl hover:scale-105 transition-transform shadow-sm cursor-pointer">Add to Queue</button>
+                    </div>
+                 </form>
+              </div>
+           </div>
+        )}
 
       </main>
     </div>
