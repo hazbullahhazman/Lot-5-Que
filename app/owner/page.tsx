@@ -204,20 +204,30 @@ function OwnerDashboard() {
   const cashToday = todayTransactions.filter(t => t.payment_method === 'cash').reduce((acc, t) => acc + Number(t.total), 0)
   const qrToday = todayTransactions.filter(t => t.payment_method === 'qr').reduce((acc, t) => acc + Number(t.total), 0)
 
-  // Chart Data format: Group by hour for today (prototype mock format)
   const chartData = useMemo(() => {
-     const hours = [9, 11, 13, 15, 17, 19, 21]
-     return hours.map(h => {
-         const cash = Math.floor(Math.random() * 100)
-         const qr = Math.floor(Math.random() * 80)
-         return {
-             name: `${h}:00`,
-             Cash: cash,
-             QR: qr,
-             Total: cash + qr
+     // Create a real grouping of today's transactions by hour
+     const hoursMap: Record<number, {cash: number, qr: number}> = {}
+     for (let h = 9; h <= 21; h += 2) {
+         hoursMap[h] = { cash: 0, qr: 0 }
+     }
+     
+     todayTransactions.forEach(t => {
+         const hour = new Date(t.created_at).getHours()
+         // Snap to closest 2-hour interval
+         const bucket = Math.max(9, Math.min(21, Math.floor(hour / 2) * 2 + (hour % 2 === 0 ? 0 : -1)))
+         if (hoursMap[bucket]) {
+             if (t.payment_method === 'cash') hoursMap[bucket].cash += Number(t.total)
+             if (t.payment_method === 'qr') hoursMap[bucket].qr += Number(t.total)
          }
      })
-  }, [transactions])
+
+     return Object.entries(hoursMap).map(([h, data]) => ({
+         name: `${h}:00`,
+         Cash: data.cash,
+         QR: data.qr,
+         Total: data.cash + data.qr
+     }))
+  }, [todayTransactions])
 
   if (loading || !profile) return <div className="min-h-screen flex items-center justify-center p-10 font-bold text-lg text-on-surface">Loading Dashboard...</div>
 
@@ -279,9 +289,9 @@ function OwnerDashboard() {
          {/* 3A. Summary Cards */}
          <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 mb-8">
              {[
-                { label: 'Total Sales Today', value: todayTotal, diff: '+12%', up: true },
-                { label: 'This Month', value: monthTotal + 28000, diff: '+5.4%', up: true, primary: true }, // adding base mock for realism
-                { label: 'Cash Today', value: cashToday, diff: '-2%', up: false },
+                 { label: 'Total Sales Today', value: todayTotal, diff: '+12%', up: true },
+                 { label: 'This Month', value: monthTotal, diff: '+5.4%', up: true, primary: true },
+                 { label: 'Cash Today', value: cashToday, diff: '-2%', up: false },
                 { label: 'QR / Transfer', value: qrToday, bg: 'bg-[#e5f638]' }
              ].map((card, i) => (
                  <div key={i} className={`${card.bg || 'bg-white'} p-6 rounded-[2rem] shadow-sm border border-outline-variant/5 relative overflow-hidden group hover:shadow-md transition-shadow`}>
@@ -389,10 +399,10 @@ function OwnerDashboard() {
                   <tbody className="divide-y divide-outline-variant/5">
                      {barbers.map(b => {
                          const bTransactions = transactions.filter(t => t.barber_id === b.id)
-                         const cuts = bTransactions.length || Math.floor(Math.random() * 15) // Mock logic for visual pop
-                         const gross = bTransactions.reduce((acc, t) => acc + Number(t.subtotal), 0) || (cuts * 45)
-                         const comm = bTransactions.reduce((acc, t) => acc + Number(t.commission_amount), 0) || (gross * b.commission_rate)
-                         const tips = bTransactions.reduce((acc, t) => acc + Number(t.tips), 0) || (cuts * 7.5)
+                         const cuts = bTransactions.length
+                         const gross = bTransactions.reduce((acc, t) => acc + Number(t.subtotal), 0)
+                         const comm = bTransactions.reduce((acc, t) => acc + Number(t.commission_amount), 0)
+                         const tips = bTransactions.reduce((acc, t) => acc + Number(t.tips), 0)
                          
                          return (
                             <tr key={b.id} className="hover:bg-surface/50 group transition-colors">

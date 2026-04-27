@@ -35,7 +35,7 @@ CREATE TABLE IF NOT EXISTS public.transactions (
 -- 3. Create Payroll Adjustments Table (For Additions/Deductions)
 CREATE TABLE IF NOT EXISTS public.payroll_adjustments (
   id uuid DEFAULT gen_random_uuid() PRIMARY KEY,
-  barber_id uuid REFERENCES public.barbers(id) ON DELETE CASCADE,
+  barber_id uuid REFERENCES public.profiles(id) ON DELETE CASCADE,
   type text CHECK (type IN ('benefit', 'deduction')),
   description text NOT NULL,
   amount numeric(10,2) NOT NULL DEFAULT 0.00,

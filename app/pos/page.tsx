@@ -76,6 +76,9 @@ export default function POSSystem() {
      }
 
      setProfile(data)
+     if (data.role === 'barber') {
+         setSelectedBarber(data.id)
+     }
      fetchData()
   }
 
@@ -93,8 +96,10 @@ export default function POSSystem() {
       const q = await supabase().from('queue_entries').select('*').in('status', ['WAITING', 'CALLED'])
       if (q.data) setActiveQueue(q.data)
 
-      const b = await supabase().from('barbers').select('*').eq('active', true)
-      if (b.data && b.data.length > 0) setBarbers(b.data)
+      const b = await supabase().from('profiles').select('*').in('role', ['barber', 'owner', 'admin'])
+      if (b.data && b.data.length > 0) {
+          setBarbers(b.data)
+      }
 
       const p = await supabase().from('pricing_config').select('*')
       if (p.data && p.data.length > 0) setPricing(p.data)
@@ -138,7 +143,7 @@ export default function POSSystem() {
 
   const totalAmount = subtotal + tips
 
-  const isFormValid = selectedCustomer && selectedService && paymentMethod
+  const isFormValid = selectedCustomer && selectedService && paymentMethod && selectedBarber
 
   const handleReset = () => {
       setSelectedCustomer(null)
@@ -182,8 +187,8 @@ export default function POSSystem() {
           tips,
           total: totalAmount,
           payment_method: paymentMethod,
-          barber_id: profile?.id,
-          barber_name: profile?.name,
+          barber_id: selectedBarber,
+          barber_name: barbers.find(b => b.id === selectedBarber)?.name || profile?.name,
           commission_amount: commissionAmount,
           status: 'COMPLETED'
       }
@@ -287,12 +292,25 @@ export default function POSSystem() {
                <h2 className="text-sm font-black uppercase tracking-widest text-[#004be2] mb-4 flex items-center gap-2">
                  <Scissors className="w-4 h-4"/> 2. Served By
                </h2>
-               <div className="py-3 px-4 rounded-xl border-2 border-[#004be2] bg-[#c5d0ff] text-[#004be2] shadow-sm font-bold text-sm flex items-center gap-3 w-max">
-                  <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-black text-[10px] text-black">
-                     {profile?.name ? profile.name.substring(0, 1) : 'U'}
-                  </div>
-                  {profile?.name || 'Loading...'}
-               </div>
+               {profile?.role === 'barber' ? (
+                   <div className="py-3 px-4 rounded-xl border-2 border-[#004be2] bg-[#c5d0ff] text-[#004be2] shadow-sm font-bold text-sm flex items-center gap-3 w-max">
+                      <div className="w-6 h-6 rounded-full bg-white flex items-center justify-center font-black text-[10px] text-black">
+                         {profile?.name ? profile.name.substring(0, 1) : 'U'}
+                      </div>
+                      {profile?.name || 'Loading...'}
+                   </div>
+               ) : (
+                   <select 
+                      value={selectedBarber} 
+                      onChange={e => setSelectedBarber(e.target.value)}
+                      className="w-full bg-surface border border-outline-variant/20 rounded-xl px-4 py-3 font-bold text-sm outline-none focus:border-[#004be2] transition-colors"
+                   >
+                      <option value="" disabled>Select the barber...</option>
+                      {barbers.map(b => (
+                          <option key={b.id} value={b.id}>{b.name}</option>
+                      ))}
+                   </select>
+               )}
             </section>
 
             {/* 1C & 1D. Services and Addons */}
@@ -404,7 +422,7 @@ export default function POSSystem() {
                   <div className="flex justify-between"><span className="opacity-60">Queue No:</span> <strong>{selectedCustomer ? `#${selectedCustomer.queue_number}` : '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Customer:</span> <strong>{selectedCustomer?.customer_name || '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Date:</span> <strong>{new Date().toLocaleDateString('en-MY')}</strong></div>
-                  <div className="flex justify-between"><span className="opacity-60">Served By:</span> <strong>{profile?.name || '--'}</strong></div>
+                  <div className="flex justify-between"><span className="opacity-60">Served By:</span> <strong>{barbers.find(b => b.id === selectedBarber)?.name || '--'}</strong></div>
                   <div className="flex justify-between"><span className="opacity-60">Status:</span> <strong>{paymentMethod ? paymentMethod.toUpperCase() : 'PENDING'}</strong></div>
                </div>
 
