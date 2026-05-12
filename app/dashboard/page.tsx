@@ -282,11 +282,14 @@ export default function UserDashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f8fcfd]"><div className="w-10 h-10 border-4 border-outline-variant/20 border-t-[#004be2] rounded-full animate-spin"></div></div>
 
   // Math
-  const walkInActiveQueue = activeQueue.filter(q => !q.booked_time);
+  const calledTickets = activeQueue.filter(q => q.status === 'CALLED');
+  const nowServing = calledTickets.length > 0 ? calledTickets[0] : null;
+  const currentServingNumber = nowServing ? nowServing.queue_number : '--';
+
+  const walkInActiveQueue = activeQueue.filter(q => !q.booked_time && q.status === 'WAITING');
   const myQueueIndex = walkInActiveQueue.findIndex(q => q.id === myTicket?.id);
   const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
   const myWaitTimeMins = Math.ceil((peopleAhead * 30) / activeWalkInBarbers);
-  const currentServingNumber = walkInActiveQueue.length > 0 ? walkInActiveQueue[0].queue_number : (myTicket ? myTicket.queue_number : '--');
 
   return (
     <div className="min-h-screen text-on-surface font-body bg-[#f8fcfd] selection:bg-primary-container selection:text-on-primary-container pb-24">
@@ -367,7 +370,7 @@ export default function UserDashboard() {
                               {/* 1. Estimate time waiting */}
                               <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
                                 <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00] flex items-baseline gap-1">
-                                  {Math.ceil((activeQueue.filter((q: any) => !q.booked_time).length * 30) / activeWalkInBarbers)} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
+                                  {Math.ceil((activeQueue.filter((q: any) => !q.booked_time && q.status === 'WAITING').length * 30) / activeWalkInBarbers)} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
                                 </div>
                                 <div className="leading-tight mt-1">
                                   <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Estimated</span>
@@ -378,7 +381,7 @@ export default function UserDashboard() {
                               {/* 2. Current people waiting */}
                               <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
                                 <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
-                                  {activeQueue.filter((q: any) => !q.booked_time).length}
+                                  {activeQueue.filter((q: any) => !q.booked_time && q.status === 'WAITING').length}
                                 </div>
                                 <div className="leading-tight mt-1">
                                   <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">People</span>
@@ -541,7 +544,7 @@ export default function UserDashboard() {
                                     <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#e5f638]/30 text-[#545b00] flex items-center justify-center"><Users className="w-5 h-5 md:w-6 md:h-6"/></div>
                                     <span className="font-bold text-gray-600 md:text-lg">Waiting Queue</span>
                                  </div>
-                                 <span className="text-2xl md:text-3xl font-black text-gray-800">{activeQueue.filter((q: any) => !q.booked_time).length}</span>
+                                 <span className="text-2xl md:text-3xl font-black text-gray-800">{activeQueue.filter((q: any) => !q.booked_time && q.status === 'WAITING').length}</span>
                               </div>
 
                               <div className="flex items-center justify-between bg-[#e5f638] p-4 md:p-5 rounded-2xl border border-[#545b00]/10 shadow-sm">
