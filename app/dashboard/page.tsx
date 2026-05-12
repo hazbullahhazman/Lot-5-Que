@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react'
 import { createClient as supabase } from '@/utils/supabase/client'
 import { motion, AnimatePresence } from 'framer-motion'
-import { LogOut, History, User, Clock, ArrowRight, ShieldCheck, Ticket } from 'lucide-react'
+import { LogOut, History, User, Clock, ArrowRight, ShieldCheck, Ticket, Users, UsersRound } from 'lucide-react'
 import { MarketingSections, SiteFooter } from '@/components/LandingUI'
 
 // Types
@@ -497,29 +497,68 @@ export default function UserDashboard() {
                            </div>
                         </div>
                     ) : (
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                           {/* Position */}
-                           <div className="bg-[#c5d0ff] rounded-[2rem] p-8 md:p-10 flex flex-col items-center justify-center text-center shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                        <>
+                        <div className="bg-[#c5d0ff] rounded-[2rem] p-8 md:p-12 flex flex-col md:flex-row items-center justify-around text-center shadow-sm relative overflow-hidden group hover:shadow-md transition-shadow">
+                           
+                           <div className="flex flex-col items-center">
                               <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-4">Your Ticket</span>
                               <div className="relative">
-                                <span className="font-headline text-[7rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">#{myTicket.queue_number}</span>
+                                <span className="font-headline text-[7rem] md:text-[9rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">#{myTicket.queue_number}</span>
                               </div>
-                              <p className="mt-6 font-body font-bold text-[#004be2]/80 uppercase tracking-widest text-xs">Currently Serving: #{currentServingNumber}</p>
+                              <span className="mt-4 bg-[#004be2] text-white px-5 py-2 rounded-full font-bold uppercase tracking-widest text-xs shadow-sm">Status: Waiting</span>
                            </div>
 
-                           {/* Est Time */}
-                           <div className="bg-[#e5f638] rounded-[2rem] p-8 md:p-10 flex flex-col items-center justify-center text-center shadow-sm border border-[#545b00]/10 relative overflow-hidden group hover:shadow-md transition-shadow">
-                              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#545b00] mb-4">Estimated Wait</span>
+                           <div className="w-full h-px md:w-px md:h-40 bg-[#004be2]/10 my-8 md:my-0"></div>
+
+                           <div className="flex flex-col items-center">
+                              <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-4">Estimated Wait</span>
                               <div className="flex items-baseline gap-2">
-                                <span className="font-headline text-[7rem] font-black text-[#545b00] tracking-tighter leading-none block group-hover:scale-105 transition-transform">{myWaitTimeMins}</span>
-                                <span className="font-headline text-2xl font-bold text-[#545b00]">MIN</span>
+                                <span className="font-headline text-[5rem] md:text-[7rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">{myWaitTimeMins}</span>
+                                <span className="font-headline text-2xl font-bold text-[#004be2]">MIN</span>
                               </div>
-                              <div className="mt-6 flex items-center gap-2 bg-black/5 px-4 py-1.5 rounded-full text-center mx-auto">
-                                <span className="material-symbols-outlined text-sm text-[#545b00]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
-                                <span className="text-[10px] font-bold text-[#545b00] uppercase tracking-widest">Calculated dynamically</span>
+                              <div className="mt-4 flex items-center gap-2 bg-white/40 px-4 py-1.5 rounded-full text-center mx-auto">
+                                <span className="material-symbols-outlined text-sm text-[#004be2]" style={{ fontVariationSettings: "'FILL' 1" }}>bolt</span>
+                                <span className="text-[10px] font-bold text-[#004be2] uppercase tracking-widest">Calculated dynamically</span>
+                              </div>
+                           </div>
+                           
+                        </div>
+
+                        <div className="mt-6 bg-white rounded-[2rem] p-6 md:p-8 shadow-sm border border-outline-variant/10">
+                           <span className="text-sm font-label font-bold uppercase tracking-widest text-[#004be2] mb-6 block text-center md:text-left">Live Shop Status</span>
+                           
+                           <div className="space-y-4">
+                              <div className="flex items-center justify-between bg-[#f8fcfd] p-4 md:p-5 rounded-2xl border border-[#c5d0ff]/40">
+                                 <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#c5d0ff] text-[#004be2] flex items-center justify-center"><UsersRound className="w-5 h-5 md:w-6 md:h-6"/></div>
+                                    <span className="font-bold text-gray-600 md:text-lg">Active Barbers</span>
+                                 </div>
+                                 <span className="text-2xl md:text-3xl font-black text-[#004be2]">{activeWalkInBarbers}</span>
+                              </div>
+
+                              <div className="flex items-center justify-between bg-[#f8fcfd] p-4 md:p-5 rounded-2xl border border-[#c5d0ff]/40">
+                                 <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-[#e5f638]/30 text-[#545b00] flex items-center justify-center"><Users className="w-5 h-5 md:w-6 md:h-6"/></div>
+                                    <span className="font-bold text-gray-600 md:text-lg">Waiting Queue</span>
+                                 </div>
+                                 <span className="text-2xl md:text-3xl font-black text-gray-800">{activeQueue.filter((q: any) => !q.booked_time).length}</span>
+                              </div>
+
+                              <div className="flex items-center justify-between bg-[#e5f638] p-4 md:p-5 rounded-2xl border border-[#545b00]/10 shadow-sm">
+                                 <div className="flex items-center gap-4">
+                                    <div className="w-10 h-10 md:w-12 md:h-12 rounded-full bg-white text-[#545b00] flex items-center justify-center"><span className="material-symbols-outlined text-lg md:text-xl">campaign</span></div>
+                                    <div className="flex flex-col text-left">
+                                       <span className="font-black text-[#545b00] md:text-lg leading-tight">Now Serving</span>
+                                       <span className="font-bold text-[#545b00]/70 text-[10px] uppercase tracking-widest">In the chair</span>
+                                    </div>
+                                 </div>
+                                 <div className="flex items-baseline gap-1">
+                                    <span className="text-3xl md:text-4xl font-headline font-black text-[#545b00]">#{currentServingNumber}</span>
+                                 </div>
                               </div>
                            </div>
                         </div>
+                        </>
                     )}
 
                     <div className="mt-12 flex flex-col items-center justify-center w-full">

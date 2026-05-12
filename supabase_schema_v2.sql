@@ -2,10 +2,7 @@
 -- Run this inside your Supabase SQL Editor to upgrade from Phase 1
 
 -- 1. Modify Profiles Table Roles
--- Note: PostgreSQL doesn't allow altering an existing CHECK constraint easily, 
--- so we drop the old one and add the new one.
-ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
-ALTER TABLE public.profiles ADD CONSTRAINT profiles_role_check CHECK (role IN ('user', 'admin', 'owner', 'barber'));
+-- Note: PostgreSQL -INT profiles_role_check CHECK (role IN ('user', 'admin', 'owner', 'barber'));
 
 -- Map existing 'admin' to 'owner' (Optional, mostly for new structure compliance)
 UPDATE public.profiles SET role = 'owner' WHERE role = 'admin';
