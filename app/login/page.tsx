@@ -5,6 +5,14 @@ import { createClient as supabase } from '@/utils/supabase/client'
 import { motion } from 'framer-motion'
 import { ArrowRight, Mail, Lock, AlertCircle } from 'lucide-react'
 
+const safeStorageSet = (key: string, value: string) => {
+  try {
+    if (typeof window !== 'undefined') window.localStorage.setItem(key, value)
+  } catch {
+    // Continue login redirect even when browser storage is unavailable.
+  }
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
@@ -21,16 +29,16 @@ export default function LoginPage() {
         // Mock Login for Demo
         setTimeout(() => {
             if (email === 'admin@lot5.com') {
-                localStorage.setItem('mock_role', 'admin')
+                safeStorageSet('mock_role', 'admin')
                 window.location.href = '/admin'
             } else if (email === 'owner@lot5.com') {
-                localStorage.setItem('mock_role', 'owner')
+                safeStorageSet('mock_role', 'owner')
                 window.location.href = '/owner'
             } else if (email === 'barber@lot5.com') {
-                localStorage.setItem('mock_role', 'barber')
+                safeStorageSet('mock_role', 'barber')
                 window.location.href = '/admin'
             } else {
-                localStorage.setItem('mock_role', 'user')
+                safeStorageSet('mock_role', 'user')
                 window.location.href = '/dashboard'
             }
         }, 1000)

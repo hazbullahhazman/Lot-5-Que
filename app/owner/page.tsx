@@ -8,6 +8,15 @@ import { Search, DollarSign, Calendar, TrendingUp, Users, User, ArrowUpRight, Ar
 import { BarChart, Bar, LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts'
 import AppSidebar from '@/components/AppSidebar'
 
+const safeStorageGet = (key: string) => {
+  try {
+    if (typeof window === 'undefined') return null
+    return window.localStorage.getItem(key)
+  } catch {
+    return null
+  }
+}
+
 export default function OwnerDashboardWrapper() {
   return (
      <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold">Loading...</div>}>
@@ -48,7 +57,7 @@ function OwnerDashboard() {
 
   const checkOwner = async () => {
      if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
-         const role = localStorage.getItem('mock_role') || 'owner'
+         const role = safeStorageGet('mock_role') || 'owner'
          if (role !== 'owner') {
              window.location.href = '/login'
          } else {

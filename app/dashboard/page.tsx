@@ -9,6 +9,30 @@ import { MarketingSections, SiteFooter } from '@/components/LandingUI'
 // Types
 type UserProfile = { id: string, name: string, email: string, role: string, phone?: string, referral_code?: string }
 type QueueEntry = { id: string, queue_number: number, status: string, created_at: string }
+const WEEK_DAYS = [
+  { key: 'sunday', label: 'Sunday' },
+  { key: 'monday', label: 'Monday' },
+  { key: 'tuesday', label: 'Tuesday' },
+  { key: 'wednesday', label: 'Wednesday' },
+  { key: 'thursday', label: 'Thursday' },
+  { key: 'friday', label: 'Friday' },
+  { key: 'saturday', label: 'Saturday' }
+]
+
+const DEFAULT_DAILY_HOURS = {
+  monday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  tuesday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  wednesday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  thursday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  friday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  saturday: { open: true, openTime: '17:00', closeTime: '22:00' },
+  sunday: { open: false, openTime: '17:00', closeTime: '22:00' }
+} as Record<string, { open: boolean; openTime: string; closeTime: string }>
+
+const parseTimeToMinutes = (timeStr: string) => {
+  const [h, m] = timeStr.split(':').map(Number)
+  return (h || 0) * 60 + (m || 0)
+}
 
 export default function UserDashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
@@ -29,6 +53,9 @@ export default function UserDashboard() {
     closeTime: '22:00',
     breakStart: '19:15',
     breakEnd: '20:00',
+    dailyHours: DEFAULT_DAILY_HOURS,
+    averageServiceMinutes: 30,
+    maxWalkInWaitMinutes: 120,
     barbers: [{ id: '1', name: 'Julian', active: true, role: 'both' }]
   })
 
@@ -42,7 +69,23 @@ export default function UserDashboard() {
 
   const activeWalkInBarbers = Math.max(1, shopSettings.barbers.filter(b => b.active && (b.role === 'both' || b.role === 'queue')).length);
   const activeBookingBarbers = Math.max(1, shopSettings.barbers.filter(b => b.active && (b.role === 'both' || b.role === 'booking')).length);
-  const slotIntervalMinutes = Math.floor(30 / activeBookingBarbers);
+  const averageServiceMinutes = shopSettings.averageServiceMinutes || 30;
+  const maxWalkInWaitMinutes = shopSettings.maxWalkInWaitMinutes || 120;
+  const walkInWaitingCount = activeQueue.filter((q: any) => !q.booked_time && ['WAITING', 'NOTIFIED', 'CALLED'].includes(q.status)).length;
+  const estimatedWalkInWaitMins = Math.ceil((walkInWaitingCount * averageServiceMinutes) / activeWalkInBarbers);
+  const nextWalkInWaitMins = Math.ceil(((walkInWaitingCount + 1) * averageServiceMinutes) / activeWalkInBarbers);
+  const maxWalkInCustomers = Math.max(1, Math.floor((maxWalkInWaitMinutes * activeWalkInBarbers) / averageServiceMinutes));
+  const isWalkInAtCapacity = nextWalkInWaitMins > maxWalkInWaitMinutes;
+  const todayInfo = WEEK_DAYS[new Date().getDay()];
+  const todayHours = (shopSettings as any).dailyHours?.[todayInfo.key] || { open: true, openTime: shopSettings.openTime, closeTime: shopSettings.closeTime };
+  const now = new Date();
+  const nowMinutes = now.getHours() * 60 + now.getMinutes();
+  const todayOpenMinutes = parseTimeToMinutes(todayHours.openTime);
+  const todayCloseMinutes = parseTimeToMinutes(todayHours.closeTime);
+  const isWithinOperationHours = Boolean(todayHours.open && nowMinutes >= todayOpenMinutes && nowMinutes < todayCloseMinutes);
+  const canJoinWalkIn = shopSettings.operationsMode !== 'closed' && shopSettings.operationsMode !== 'slot' && isWithinOperationHours;
+  const canBookSlot = shopSettings.operationsMode !== 'closed' && shopSettings.operationsMode !== 'queue';
+  const operationStatus = shopSettings.operationsMode === 'closed' || !todayHours.open ? 'Closed today' : isWithinOperationHours ? 'Open now' : nowMinutes < todayOpenMinutes ? 'Not open yet' : 'Closed for today';
 
   useEffect(() => {
     fetchSessionAndData()
@@ -112,8 +155,8 @@ export default function UserDashboard() {
       // Active Queue list (Used for capacity limits & queue positioning)
       const { data: qList } = await supabase()
          .from('queue_entries')
-         .select('id, queue_number, status, booked_time')
-         .in('status', ['WAITING', 'CALLED'])
+         .select('id, queue_number, status, booked_time, entry_type')
+         .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
          .order('queue_number', { ascending: true })
       
       if (qList) setActiveQueue(qList)
@@ -123,7 +166,7 @@ export default function UserDashboard() {
          .from('queue_entries')
          .select('*')
          .eq('user_id', uid)
-         .in('status', ['WAITING', 'CALLED'])
+         .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
          .order('joined_at', { ascending: false })
          .limit(1)
          .single()
@@ -150,6 +193,16 @@ export default function UserDashboard() {
   }
 
   const handleJoinQueue = async () => {
+     if (!canJoinWalkIn) {
+         alert(`Walk-in queue is not open right now. Today's hours: ${todayHours.open ? `${todayHours.openTime} - ${todayHours.closeTime}` : 'Closed'}. Please book a slot if available.`)
+         return
+     }
+     if (isWalkInAtCapacity) {
+         setQueueMode('booking')
+         alert(`Walk-in wait is above ${maxWalkInWaitMinutes} minutes. Please book a slot for a more accurate time.`)
+         return
+     }
+
      if (profile?.id === 'mock-123') {
          const mockId = 'mq-' + Math.random().toString(36)
          localStorage.setItem('lot5_mock_queue', mockId)
@@ -157,32 +210,43 @@ export default function UserDashboard() {
          return
      }
 
-     const today = new Date()
-     today.setHours(0, 0, 0, 0)
-     const todayIso = today.toISOString()
-     
-     let nextTicketNumber = 1
-     const { data: qnData } = await supabase()
-         .from('queue_entries')
-         .select('queue_number')
-         .gte('joined_at', todayIso)
-         .lt('queue_number', 999)
-         .order('queue_number', { ascending: false })
-         .limit(1)
-         
-     if (qnData && qnData.length > 0) {
-         nextTicketNumber = qnData[0].queue_number + 1
-     }
-
      const finalName = remark ? `${profile?.name} - ${serviceType} (${remark})` : `${profile?.name} - ${serviceType}`
 
-     const { data, error } = await supabase().from('queue_entries').insert([{
-         user_id: profile?.id,
-         customer_name: finalName,
-         phone_number: profile?.phone,
-         queue_number: nextTicketNumber,
-         status: 'WAITING'
-     }]).select().single()
+     let data: any = null
+     let error: any = null
+     const rpcResult = await supabase().rpc('join_walk_in_queue', {
+         p_customer_name: finalName,
+         p_phone_number: profile?.phone || null,
+         p_user_id: profile?.id,
+         p_service_type: serviceType,
+         p_remark: remark || null
+     })
+
+     if (!rpcResult.error) {
+         data = Array.isArray(rpcResult.data) ? rpcResult.data[0] : rpcResult.data
+     } else {
+         const today = new Date()
+         today.setHours(0, 0, 0, 0)
+         const { data: qnData } = await supabase()
+             .from('queue_entries')
+             .select('queue_number')
+             .gte('joined_at', today.toISOString())
+             .eq('entry_type', 'walk_in')
+             .order('queue_number', { ascending: false })
+             .limit(1)
+         const nextTicketNumber = qnData?.[0]?.queue_number ? qnData[0].queue_number + 1 : 1
+         const insertResult = await supabase().from('queue_entries').insert([{
+             user_id: profile?.id,
+             customer_name: finalName,
+             phone_number: profile?.phone,
+             queue_number: nextTicketNumber,
+             status: 'WAITING',
+             entry_type: 'walk_in',
+             service_type: serviceType
+         }]).select().single()
+         data = insertResult.data
+         error = insertResult.error
+     }
 
      if (error) {
          alert("Failed to join queue: " + error.message)
@@ -221,14 +285,14 @@ export default function UserDashboard() {
          return
      }
      
-     // Live mode - normally insert to Supabase here
      const { error } = await supabase().from('queue_entries').insert([{
          user_id: profile?.id,
          customer_name: profile?.name,
          phone_number: profile?.phone,
-         queue_number: 999, // default indicator
+         queue_number: 0,
          status: 'WAITING',
-         booked_time: selectedSlot
+         booked_time: selectedSlot,
+         entry_type: 'booking'
      }])
      if (error) {
          alert("Booking failed: " + error.message)
@@ -240,12 +304,13 @@ export default function UserDashboard() {
 
   const generateSlots = () => {
      const slots = [];
+     if (!canBookSlot || !todayHours.open) return slots;
      const parseTime = (timeStr: string) => {
         const [h,m] = timeStr.split(':').map(Number);
         return h * 60 + m;
      };
-     const open = parseTime(shopSettings.openTime);
-     const close = parseTime(shopSettings.closeTime);
+     const open = parseTime(todayHours.openTime);
+     const close = parseTime(todayHours.closeTime);
      const bStart = parseTime(shopSettings.breakStart);
      const bEnd = parseTime(shopSettings.breakEnd);
 
@@ -257,7 +322,7 @@ export default function UserDashboard() {
          }
      });
 
-     for (let t = open; t < close; t += 30) {
+     for (let t = open; t < close; t += averageServiceMinutes) {
          if (t >= bStart && t < bEnd) continue;
          const h = Math.floor(t / 60).toString().padStart(2, '0');
          const m = (t % 60).toString().padStart(2, '0');
@@ -282,14 +347,14 @@ export default function UserDashboard() {
   if (loading) return <div className="min-h-screen flex items-center justify-center bg-[#f8fcfd]"><div className="w-10 h-10 border-4 border-outline-variant/20 border-t-[#004be2] rounded-full animate-spin"></div></div>
 
   // Math
-  const calledTickets = activeQueue.filter(q => q.status === 'CALLED');
+  const calledTickets = activeQueue.filter(q => q.status === 'IN_CHAIR' || q.status === 'CALLED');
   const nowServing = calledTickets.length > 0 ? calledTickets[0] : null;
   const currentServingNumber = nowServing ? nowServing.queue_number : '--';
 
-  const walkInActiveQueue = activeQueue.filter(q => !q.booked_time && q.status === 'WAITING');
+  const walkInActiveQueue = activeQueue.filter(q => !q.booked_time && ['WAITING', 'NOTIFIED', 'CALLED'].includes(q.status));
   const myQueueIndex = walkInActiveQueue.findIndex(q => q.id === myTicket?.id);
   const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
-  const myWaitTimeMins = Math.ceil((peopleAhead * 30) / activeWalkInBarbers);
+  const myWaitTimeMins = Math.ceil((peopleAhead * averageServiceMinutes) / activeWalkInBarbers);
 
   return (
     <div className="min-h-screen text-on-surface font-body bg-[#f8fcfd] selection:bg-primary-container selection:text-on-primary-container pb-24">
@@ -343,18 +408,53 @@ export default function UserDashboard() {
                     </div>
                     
                     <div className="relative z-10 max-w-lg mx-auto">
+                      <div className="bg-white rounded-[2rem] border border-outline-variant/10 shadow-sm p-5 mb-6 text-left">
+                        <div className="flex items-start justify-between gap-4 mb-5">
+                          <div>
+                            <p className="text-[10px] font-black uppercase tracking-widest text-[#004be2] mb-1">Today&apos;s Operation</p>
+                            <h1 className="font-headline text-2xl font-black text-on-surface">{todayInfo.label}</h1>
+                            <p className="text-sm font-bold text-on-surface-variant mt-1">
+                              {todayHours.open ? `${todayHours.openTime} - ${todayHours.closeTime}` : 'Closed'}
+                            </p>
+                          </div>
+                          <span className={`px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest ${isWithinOperationHours ? 'bg-[#e5f638] text-[#545b00]' : 'bg-red-50 text-red-600 border border-red-100'}`}>
+                            {operationStatus}
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-3 gap-3">
+                          <div className="rounded-2xl bg-[#e5f638]/20 border border-[#e5f638] p-3 text-center">
+                            <p className="font-headline text-2xl font-black text-[#545b00]">{walkInWaitingCount}</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-[#545b00]/70 mt-1">Waiting</p>
+                          </div>
+                          <div className="rounded-2xl bg-[#c5d0ff]/35 border border-[#004be2]/10 p-3 text-center">
+                            <p className="font-headline text-2xl font-black text-[#004be2]">{estimatedWalkInWaitMins}</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-[#004be2]/70 mt-1">Est. Min</p>
+                          </div>
+                          <div className="rounded-2xl bg-surface-container-lowest border border-outline-variant/10 p-3 text-center">
+                            <p className="font-headline text-2xl font-black text-on-surface">{activeWalkInBarbers}</p>
+                            <p className="text-[9px] font-black uppercase tracking-widest text-on-surface-variant mt-1">Barbers</p>
+                          </div>
+                        </div>
+                        {!isWithinOperationHours && todayHours.open && (
+                          <p className="mt-4 rounded-2xl bg-red-50 border border-red-100 px-4 py-3 text-sm font-bold text-red-700">
+                            Walk-in queue starts at {todayHours.openTime}. You can review slots if booking is available.
+                          </p>
+                        )}
+                      </div>
                       
                       {/* Segmented Control */}
                       {shopSettings.operationsMode === 'both' && (
                         <div className="flex bg-surface-container p-1 rounded-2xl mb-10 w-full">
                            <button 
-                             onClick={() => setQueueMode('walk-in')}
-                             className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'walk-in' ? 'bg-white shadow-sm text-on-surface' : 'text-on-surface-variant hover:bg-white/50'}`}
-                           >Walk-in Queue</button>
-                           <button 
-                             onClick={() => setQueueMode('booking')}
-                             className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors ${queueMode === 'booking' ? 'bg-[#004be2] shadow-sm text-white' : 'text-on-surface-variant hover:bg-white/50'}`}
-                           >Book a Slot</button>
+                              onClick={() => setQueueMode('walk-in')}
+                              disabled={!canJoinWalkIn}
+                              className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${queueMode === 'walk-in' ? 'bg-white shadow-sm text-on-surface' : 'text-on-surface-variant hover:bg-white/50'}`}
+                            >Walk-in Queue</button>
+                            <button 
+                              onClick={() => setQueueMode('booking')}
+                              disabled={!canBookSlot}
+                              className={`flex-1 py-3 rounded-xl font-bold tracking-widest uppercase text-xs transition-colors disabled:opacity-40 disabled:cursor-not-allowed ${queueMode === 'booking' ? 'bg-[#004be2] shadow-sm text-white' : 'text-on-surface-variant hover:bg-white/50'}`}
+                            >Book a Slot</button>
                         </div>
                       )}
 
@@ -370,7 +470,7 @@ export default function UserDashboard() {
                               {/* 1. Estimate time waiting */}
                               <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
                                 <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00] flex items-baseline gap-1">
-                                  {Math.ceil((activeQueue.filter((q: any) => !q.booked_time && q.status === 'WAITING').length * 30) / activeWalkInBarbers)} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
+                                  {estimatedWalkInWaitMins} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
                                 </div>
                                 <div className="leading-tight mt-1">
                                   <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Estimated</span>
@@ -381,7 +481,7 @@ export default function UserDashboard() {
                               {/* 2. Current people waiting */}
                               <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
                                 <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
-                                  {activeQueue.filter((q: any) => !q.booked_time && q.status === 'WAITING').length}
+                                  {walkInWaitingCount}
                                 </div>
                                 <div className="leading-tight mt-1">
                                   <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">People</span>
@@ -401,6 +501,14 @@ export default function UserDashboard() {
                               </div>
                             </div>
                             
+                            {isWalkInAtCapacity && (
+                              <div className="bg-[#004be2] text-white p-5 rounded-2xl shadow-sm mb-6 text-left border border-[#c5d0ff]">
+                                <p className="font-black uppercase tracking-widest text-xs mb-2 text-[#e5f638]">Walk-ins are full</p>
+                                <p className="font-bold leading-relaxed">Estimated wait is now over {maxWalkInWaitMinutes} minutes. Book a slot instead so you get an accurate time.</p>
+                                <p className="text-xs font-bold uppercase tracking-widest text-white/70 mt-3">Capacity: {walkInWaitingCount}/{maxWalkInCustomers} walk-ins with {activeWalkInBarbers} walk-in barber{activeWalkInBarbers > 1 ? 's' : ''}</p>
+                              </div>
+                            )}
+
                             <div className="bg-white p-4 rounded-2xl border border-outline-variant/10 shadow-sm mb-6 text-left">
                                <label className="text-xs font-bold uppercase tracking-widest text-on-surface-variant mb-2 block">Haircut Style</label>
                                <select 
@@ -427,9 +535,13 @@ export default function UserDashboard() {
                                />
                             </div>
 
-                            <button onClick={handleJoinQueue} className="w-full bg-[#e5f638] text-[#545b00] font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3">
-                               Join the Queue <ArrowRight className="w-5 h-5" />
-                            </button>
+                             <button
+                               disabled={!canJoinWalkIn && !isWalkInAtCapacity}
+                               onClick={isWalkInAtCapacity ? () => setQueueMode('booking') : handleJoinQueue}
+                               className={`w-full font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100 ${isWalkInAtCapacity ? 'bg-[#004be2] text-white' : canJoinWalkIn ? 'bg-[#e5f638] text-[#545b00]' : 'bg-surface-container text-on-surface-variant'}`}
+                             >
+                                {isWalkInAtCapacity ? 'Book a Slot Instead' : canJoinWalkIn ? 'Join the Queue' : 'Queue Opens Later'} <ArrowRight className="w-5 h-5" />
+                             </button>
                           </>
                       ) : (
                           <div className="text-left">
@@ -459,26 +571,26 @@ export default function UserDashboard() {
                                 </div>
                              </div>
 
-                             <button onClick={handleBookSlot} className="w-full bg-[#004be2] text-white font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-6">
-                                Confirm Booking
-                             </button>
+                              <button disabled={!canBookSlot} onClick={handleBookSlot} className="w-full bg-[#004be2] text-white font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                                 Confirm Booking
+                              </button>
 
-                             <div className="bg-surface-container p-4 rounded-xl text-center border border-outline-variant/10">
-                                <p className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Admin Schedule: {shopSettings.openTime} - {shopSettings.closeTime} | Break {shopSettings.breakStart} - {shopSettings.breakEnd}</p>
-                             </div>
+                              <div className="bg-surface-container p-4 rounded-xl text-center border border-outline-variant/10">
+                                <p className="text-[10px] uppercase font-bold tracking-widest text-on-surface-variant">Today: {todayHours.open ? `${todayHours.openTime} - ${todayHours.closeTime}` : 'Closed'} | Break {shopSettings.breakStart} - {shopSettings.breakEnd}</p>
+                              </div>
                           </div>
                       )}
                     </div>
                  </div>
-              ) : myTicket.status === 'CALLED' ? (
+              ) : ['NOTIFIED', 'CALLED'].includes(myTicket.status) ? (
                  <div className="bg-[#004be2] rounded-[2rem] p-8 md:p-14 text-center text-white shadow-xl relative overflow-hidden animate-in zoom-in duration-500">
                     <div className="absolute inset-0 bg-[url('https://www.transparenttextures.com/patterns/carbon-fibre.png')] opacity-10 mix-blend-overlay"></div>
                     <div className="w-32 h-32 bg-white/20 backdrop-blur-md rounded-full flex items-center justify-center mx-auto mb-8 border-4 border-[#c5d0ff] shadow-inner animate-pulse">
                       <span className="material-symbols-outlined text-6xl text-white">campaign</span>
                     </div>
-                    <h1 className="font-headline text-5xl md:text-6xl font-black tracking-tighter mb-6 leading-tight">It&apos;s your turn!</h1>
+                    <h1 className="font-headline text-5xl md:text-6xl font-black tracking-tighter mb-6 leading-tight">Your turn is close!</h1>
                     <p className="bg-[#e5f638] text-[#545b00] inline-block px-8 py-3 rounded-full font-bold uppercase tracking-widest text-sm shadow-md mt-2">
-                       Head to the shop floor immediately
+                       Please get ready or head to the shop
                     </p>
                  </div>
               ) : (
@@ -508,7 +620,7 @@ export default function UserDashboard() {
                               <div className="relative">
                                 <span className="font-headline text-[7rem] md:text-[9rem] font-black text-[#004be2] tracking-tighter leading-none block group-hover:scale-105 transition-transform">#{myTicket.queue_number}</span>
                               </div>
-                              <span className="mt-4 bg-[#004be2] text-white px-5 py-2 rounded-full font-bold uppercase tracking-widest text-xs shadow-sm">Status: Waiting</span>
+                              <span className="mt-4 bg-[#004be2] text-white px-5 py-2 rounded-full font-bold uppercase tracking-widest text-xs shadow-sm">Status: {myTicket.status === 'HOLD' ? 'On Hold' : myTicket.status === 'IN_CHAIR' ? 'Now Serving' : myTicket.status === 'NOTIFIED' ? 'Notified' : 'Waiting'}</span>
                            </div>
 
                            <div className="w-full h-px md:w-px md:h-40 bg-[#004be2]/10 my-8 md:my-0"></div>

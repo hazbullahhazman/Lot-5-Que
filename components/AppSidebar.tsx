@@ -1,6 +1,6 @@
 'use client'
 
-import React from 'react'
+import React, { useEffect, useState } from 'react'
 import { LayoutDashboard, Users, Shield, UserPlus, Activity, Calculator, Banknote, X, Tags } from 'lucide-react'
 import { useRouter } from 'next/navigation'
 
@@ -14,9 +14,19 @@ interface AppSidebarProps {
 
 export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onTabChange, profile }: AppSidebarProps) {
   const router = useRouter()
+  const [pendingHref, setPendingHref] = useState<string | null>(null)
+
+  useEffect(() => {
+    if (profile?.role === 'admin' || profile?.role === 'barber' || profile?.role === 'owner') {
+      router.prefetch('/pos')
+    }
+  }, [profile?.role, router])
   
   const handleNav = (tabId: string, href?: string) => {
     if (href) {
+       setPendingHref(href)
+       setSidebarOpen(false)
+       router.prefetch(href)
        router.push(href)
        return
     }
@@ -24,11 +34,13 @@ export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onT
     // Cross-pollinate owner navigation to admin views
     const sharedAdminViews = ['overview', 'management', 'users']
     if (profile?.role === 'owner' && sharedAdminViews.includes(tabId)) {
+        setSidebarOpen(false)
         router.push(`/admin?tab=${tabId}`)
         return
     }
     // Similarly, if admin or barber somehow forces payroll/owner dashboard
     if (['admin', 'barber'].includes(profile?.role) && ['customers', 'payroll'].includes(tabId)) {
+        setSidebarOpen(false)
         router.push(`/admin?tab=${tabId}`)
         return
     }
@@ -40,12 +52,13 @@ export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onT
     } else {
        // Otherwise, we navigate cleanly via Next router
        let basePath = profile?.role === 'owner' ? '/owner' : '/admin'
+       setSidebarOpen(false)
        router.push(`${basePath}?tab=${tabId}`)
     }
   }
 
   return (
-    <aside className={`fixed left-0 top-0 h-full w-64 flex-col pt-6 md:pt-24 pb-8 px-4 bg-white border-r border-outline-variant/10 shadow-xl transition-transform z-50 duration-300 flex md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} print:hidden`}>
+    <aside className={`fixed left-0 top-0 h-dvh w-[82vw] max-w-72 md:w-64 flex-col pt-6 md:pt-24 pb-8 px-4 bg-white border-r border-outline-variant/10 shadow-xl transition-transform z-50 duration-300 flex md:translate-x-0 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} print:hidden`}>
       <div className="flex justify-end md:hidden mb-2">
          <button onClick={() => setSidebarOpen(false)} className="p-2 text-on-surface-variant hover:bg-surface rounded-full"><X className="w-5 h-5" /></button>
       </div>
@@ -72,9 +85,9 @@ export default function AppSidebar({ sidebarOpen, setSidebarOpen, activeTab, onT
               </button>
 
               {/* 2. Launch POS */}
-              <button onClick={() => handleNav('pos', '/pos')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none ${activeTab === 'pos' ? 'bg-[#c5ff50] text-[#4d6600] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
+              <button disabled={pendingHref === '/pos'} onMouseEnter={() => router.prefetch('/pos')} onFocus={() => router.prefetch('/pos')} onClick={() => handleNav('pos', '/pos')} className={`w-full flex items-center gap-3 rounded-2xl px-4 py-3.5 transition-all outline-none disabled:opacity-70 disabled:cursor-wait ${activeTab === 'pos' ? 'bg-[#c5ff50] text-[#4d6600] scale-[0.98] shadow-sm font-black' : 'text-gray-500 hover:bg-surface hover:translate-x-1 font-bold'}`}>
                 <Calculator className={`w-5 h-5 ${activeTab === 'pos' ? 'text-[#4d6600]' : ''}`} />
-                <span className="tracking-wide">Launch POS</span>
+                <span className="tracking-wide">{pendingHref === '/pos' ? 'Opening POS...' : 'Launch POS'}</span>
               </button>
 
               {/* 3. My Performance */}

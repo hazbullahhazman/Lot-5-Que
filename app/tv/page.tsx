@@ -112,17 +112,20 @@ export default function TVDashboard() {
       const { data: qList } = await supabase()
          .from('queue_entries')
          .select('id, queue_number, status, customer_name, booked_time, profiles(name)')
-         .in('status', ['WAITING', 'CALLED'])
+         .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
          .order('queue_number', { ascending: true })
       
-      if (qList) setActiveQueue(qList as QueueEntry[])
+      if (qList) setActiveQueue(qList.map((q: any) => ({
+         ...q,
+         profiles: Array.isArray(q.profiles) ? q.profiles[0] : q.profiles
+      })) as QueueEntry[])
       setLoading(false)
   }
 
-  const calledTickets = activeQueue.filter(q => q.status === 'CALLED')
-  const waitingTickets = activeQueue.filter(q => q.status === 'WAITING' && !q.booked_time)
+  const calledTickets = activeQueue.filter(q => q.status === 'NOTIFIED' || q.status === 'CALLED')
+  const waitingTickets = activeQueue.filter(q => ['WAITING', 'NOTIFIED', 'CALLED'].includes(q.status) && !q.booked_time)
   
-  const nowServing = calledTickets.length > 0 ? calledTickets[0] : null
+  const nowServing = activeQueue.find(q => q.status === 'IN_CHAIR') || calledTickets[0] || null
   const nextUp = waitingTickets.length > 0 ? waitingTickets[0] : null
   const upcomingQueue = waitingTickets.slice(1, 11) // Next 10
 

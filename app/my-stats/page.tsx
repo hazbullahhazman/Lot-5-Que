@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { createClient as supabase } from '@/utils/supabase/client'
-import { Scissors, DollarSign, Wallet, Calendar, Clock, ArrowRight, Menu } from 'lucide-react'
+import { Scissors, Banknote, Wallet, Calendar, Clock, Menu } from 'lucide-react'
 import AppSidebar from '@/components/AppSidebar'
 
 export default function BarberStats() {
@@ -125,11 +125,11 @@ export default function BarberStats() {
               </div>
               <div className="bg-surface-container border border-outline-variant/10 p-6 rounded-[2rem] shadow-sm">
                  <p className="text-[10px] text-on-surface-variant font-black uppercase tracking-widest mb-2 flex items-center gap-2">Total Monthly Comm.</p>
-                 <span className="font-headline text-4xl font-black text-on-surface">${commThisMonth.toFixed(2)}</span>
+                 <span className="font-headline text-4xl font-black text-on-surface">RM {commThisMonth.toFixed(2)}</span>
               </div>
               <div className="bg-surface-container border border-outline-variant/10 p-6 rounded-[2rem] shadow-sm">
                  <p className="text-[10px] text-on-surface-variant font-black uppercase tracking-widest mb-2 flex items-center gap-2">Sale Done</p>
-                 <span className="font-headline text-4xl font-black text-on-surface">${salesThisMonth.toFixed(2)}</span>
+                 <span className="font-headline text-4xl font-black text-on-surface">RM {salesThisMonth.toFixed(2)}</span>
               </div>
           </div>
 
@@ -141,12 +141,12 @@ export default function BarberStats() {
                  <span className="font-headline text-5xl font-black">{cutsToday}</span>
               </div>
               <div className="bg-[#e5f638] text-[#545b00] p-6 rounded-[2rem] shadow-sm">
-                 <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2"><DollarSign className="w-3 h-3"/> Commission</p>
-                 <span className="font-headline text-5xl font-black">${commToday.toFixed(2)}</span>
+                 <p className="text-[10px] font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Banknote className="w-3 h-3"/> Commission</p>
+                 <span className="font-headline text-5xl font-black">RM {commToday.toFixed(2)}</span>
               </div>
               <div className="bg-white border border-outline-variant/10 p-6 rounded-[2rem] shadow-sm">
                  <p className="text-[10px] text-on-surface-variant font-black uppercase tracking-widest mb-2 flex items-center gap-2"><Wallet className="w-3 h-3"/> Tips Earned</p>
-                 <span className="font-headline text-4xl font-black text-on-surface">${tipsToday.toFixed(2)}</span>
+                 <span className="font-headline text-4xl font-black text-on-surface">RM {tipsToday.toFixed(2)}</span>
               </div>
           </div>
 
@@ -156,7 +156,7 @@ export default function BarberStats() {
                 <div className="font-headline text-2xl font-bold opacity-80">(Commission + Tips)</div>
              </div>
              <div className="text-right">
-                <span className="font-headline text-5xl shadow-inner">${totalPayout.toFixed(2)}</span>
+                 <span className="font-headline text-5xl shadow-inner">RM {totalPayout.toFixed(2)}</span>
              </div>
           </div>
 
@@ -186,12 +186,12 @@ export default function BarberStats() {
                        <div className="text-right flex items-center sm:block gap-4 justify-between sm:w-auto w-full bg-surface-container sm:bg-transparent p-3 sm:p-0 rounded-xl">
                           <div>
                              <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest">Commission</p>
-                             <p className="font-black text-[#004be2]">+${Number(t.commission_amount).toFixed(2)}</p>
+                             <p className="font-black text-[#004be2]">+RM {Number(t.commission_amount).toFixed(2)}</p>
                           </div>
                           {t.tips > 0 && (
                              <div>
                                 <p className="text-xs font-bold text-on-surface-variant uppercase tracking-widest mt-0 sm:mt-2">Tips</p>
-                                <p className="font-black text-[#545b00]">+${Number(t.tips).toFixed(2)}</p>
+                                <p className="font-black text-[#545b00]">+RM {Number(t.tips).toFixed(2)}</p>
                              </div>
                           )}
                        </div>
