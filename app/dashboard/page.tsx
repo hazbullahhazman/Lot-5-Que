@@ -61,6 +61,11 @@ const normalizeShopSettings = (settings: any) => {
   }
 }
 
+const isMissingColumnError = (error: any, column: string) => {
+  const message = String(error?.message || error?.details || '')
+  return message.includes(column) && (message.includes('schema cache') || message.includes('column'))
+}
+
 export default function UserDashboard() {
   const [profile, setProfile] = useState<UserProfile | null>(null)
   const [loading, setLoading] = useState(true)
@@ -186,7 +191,7 @@ export default function UserDashboard() {
       // Active Queue list (Used for capacity limits & queue positioning)
       const { data: qList } = await supabase()
          .from('queue_entries')
-         .select('id, queue_number, status, booked_time, entry_type')
+         .select('id, queue_number, status, booked_time')
          .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
          .order('queue_number', { ascending: true })
       
@@ -262,11 +267,11 @@ export default function UserDashboard() {
              .from('queue_entries')
              .select('queue_number')
              .gte('joined_at', today.toISOString())
-             .eq('entry_type', 'walk_in')
+             .is('booked_time', null)
              .order('queue_number', { ascending: false })
              .limit(1)
          const nextTicketNumber = qnData?.[0]?.queue_number ? qnData[0].queue_number + 1 : 1
-         const insertResult = await supabase().from('queue_entries').insert([{
+         const modernPayload = {
              user_id: profile?.id,
              customer_name: finalName,
              phone_number: profile?.phone,
@@ -274,7 +279,18 @@ export default function UserDashboard() {
              status: 'WAITING',
              entry_type: 'walk_in',
              service_type: serviceType
-         }]).select().single()
+         }
+         let insertResult = await supabase().from('queue_entries').insert([modernPayload]).select().single()
+         if (isMissingColumnError(insertResult.error, 'entry_type') || isMissingColumnError(insertResult.error, 'service_type')) {
+            const legacyPayload = {
+              user_id: profile?.id,
+              customer_name: finalName,
+              phone_number: profile?.phone,
+              queue_number: nextTicketNumber,
+              status: 'WAITING'
+            }
+            insertResult = await supabase().from('queue_entries').insert([legacyPayload]).select().single()
+         }
          data = insertResult.data
          error = insertResult.error
      }
@@ -316,7 +332,7 @@ export default function UserDashboard() {
          return
      }
      
-     const { error } = await supabase().from('queue_entries').insert([{
+     const modernBookingPayload = {
          user_id: profile?.id,
          customer_name: profile?.name,
          phone_number: profile?.phone,
@@ -324,7 +340,20 @@ export default function UserDashboard() {
          status: 'WAITING',
          booked_time: selectedSlot,
          entry_type: 'booking'
-     }])
+     }
+     let { error } = await supabase().from('queue_entries').insert([modernBookingPayload])
+     if (isMissingColumnError(error, 'entry_type')) {
+        const legacyBookingPayload = {
+          user_id: profile?.id,
+          customer_name: profile?.name,
+          phone_number: profile?.phone,
+          queue_number: 0,
+          status: 'WAITING',
+          booked_time: selectedSlot
+        }
+        const legacyResult = await supabase().from('queue_entries').insert([legacyBookingPayload])
+        error = legacyResult.error
+     }
      if (error) {
          alert("Booking failed: " + error.message)
      } else {
@@ -506,41 +535,6 @@ export default function UserDashboard() {
                             </div>
                             <h1 className="font-headline text-4xl font-black tracking-tight text-on-surface mb-4">Ready for a fresh cut?</h1>
                             <p className="text-on-surface-variant font-medium mb-6 text-lg">Join the queue digitally. We&apos;ll notify you when it&apos;s your turn.</p>
-                            
-                            <div className="grid grid-cols-3 gap-3 mb-10 mx-auto w-full">
-                              {/* 1. Estimate time waiting */}
-                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
-                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00] flex items-baseline gap-1">
-                                  {estimatedWalkInWaitMins} <span className="text-[10px] sm:text-xs font-bold">MIN</span>
-                                </div>
-                                <div className="leading-tight mt-1">
-                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Estimated</span>
-                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">Wait Time</span>
-                                </div>
-                              </div>
-
-                              {/* 2. Current people waiting */}
-                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
-                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
-                                  {walkInWaitingCount}
-                                </div>
-                                <div className="leading-tight mt-1">
-                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">People</span>
-                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">Waiting</span>
-                                </div>
-                              </div>
-
-                              {/* 3. Barber on Duty */}
-                              <div className="bg-[#e5f638]/20 border border-[#e5f638] rounded-2xl py-3 px-2 flex flex-col items-center justify-center shadow-sm text-center">
-                                <div className="text-2xl sm:text-3xl font-black font-headline text-[#545b00]">
-                                  {activeWalkInBarbers}
-                                </div>
-                                <div className="leading-tight mt-1">
-                                  <span className="font-bold text-[#545b00] block text-[10px] sm:text-[11px]">Barbers</span>
-                                  <span className="font-black text-[#545b00] text-[8px] sm:text-[10px] uppercase tracking-widest">On Duty</span>
-                                </div>
-                              </div>
-                            </div>
                             
                             {isWalkInAtCapacity && (
                               <div className="bg-[#004be2] text-white p-5 rounded-2xl shadow-sm mb-6 text-left border border-[#c5d0ff]">

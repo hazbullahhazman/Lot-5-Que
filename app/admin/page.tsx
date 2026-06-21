@@ -88,6 +88,11 @@ const normalizeShopSettings = (settings: any) => {
   }
 }
 
+const isMissingColumnError = (error: any, column: string) => {
+  const message = String(error?.message || error?.details || '')
+  return message.includes(column) && (message.includes('schema cache') || message.includes('column'))
+}
+
 export default function AdminDashboardWrapper() {
   return (
      <Suspense fallback={<div className="min-h-screen flex items-center justify-center font-bold">Loading...</div>}>
@@ -194,20 +199,45 @@ function AdminDashboard() {
 
      try {
          // Active Queue List mapping to User profiles
-         const { data: qData } = await supabase()
+         let qResult: any = await supabase()
             .from('queue_entries')
             .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, booked_time, entry_type, assigned_barber_id, profiles(name, email, phone)')
             .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
             .order('queue_number', { ascending: true })
+         if (isMissingColumnError(qResult.error, 'entry_type') || isMissingColumnError(qResult.error, 'assigned_barber_id')) {
+            qResult = await supabase()
+               .from('queue_entries')
+               .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, booked_time, profiles(name, email, phone)')
+               .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
+               .order('queue_number', { ascending: true })
+         }
+         if (qResult.error) {
+            console.warn('Queue profile join failed, loading queue entries without profiles:', qResult.error.message)
+            qResult = await supabase()
+               .from('queue_entries')
+               .select('id, queue_number, status, user_id, customer_name, phone_number, joined_at, booked_time')
+               .in('status', ['WAITING', 'NOTIFIED', 'CALLED', 'IN_CHAIR', 'HOLD', 'PAYMENT_PENDING'])
+               .order('queue_number', { ascending: true })
+         }
+         const qData = qResult.data
          if (qData) setActiveQueue(qData)
 
          // Historical Data for CRM
-         const { data: hData } = await supabase()
+         let hResult: any = await supabase()
             .from('queue_entries')
             .select('id, queue_number, status, joined_at, customer_name, profiles(name, email)')
             .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
             .order('joined_at', { ascending: false })
             .limit(100)
+         if (hResult.error) {
+            hResult = await supabase()
+               .from('queue_entries')
+               .select('id, queue_number, status, joined_at, customer_name')
+               .in('status', ['COMPLETED', 'CANCELLED', 'ABSENT'])
+               .order('joined_at', { ascending: false })
+               .limit(100)
+         }
+         const hData = hResult.data
          if (hData) {
              setHistory(hData)
              // Calculate CRM Metrics
@@ -394,14 +424,23 @@ function AdminDashboard() {
              if (qnData && qnData.length > 0) {
                  nextTicketNumber = qnData[0].queue_number + 1
              }
-             await supabase().from('queue_entries').insert([{
+             const modernPayload = {
                  customer_name: finalName,
                  phone_number: phone,
                  queue_number: nextTicketNumber,
                  status: 'WAITING',
                  entry_type: 'walk_in',
                  service_type: service
-             }])
+             }
+             let insertResult = await supabase().from('queue_entries').insert([modernPayload])
+             if (isMissingColumnError(insertResult.error, 'entry_type') || isMissingColumnError(insertResult.error, 'service_type')) {
+                insertResult = await supabase().from('queue_entries').insert([{
+                  customer_name: finalName,
+                  phone_number: phone,
+                  queue_number: nextTicketNumber,
+                  status: 'WAITING'
+                }])
+             }
          }
          fetchData()
       }

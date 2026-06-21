@@ -179,12 +179,21 @@ export default function POSSystem() {
     }
 
     try {
-      const q = await supabase()
+      let q: any = await supabase()
         .from('queue_entries')
         .select('*, profiles(name, email, phone)')
         .in('status', ACTIVE_STATUSES)
         .order('booked_time', { ascending: true, nullsFirst: false })
         .order('queue_number', { ascending: true })
+      if (q.error) {
+        console.warn('POS profile join failed, loading queue entries without profiles:', q.error.message)
+        q = await supabase()
+          .from('queue_entries')
+          .select('*')
+          .in('status', ACTIVE_STATUSES)
+          .order('booked_time', { ascending: true, nullsFirst: false })
+          .order('queue_number', { ascending: true })
+      }
       if (q.data) {
         setActiveQueue(q.data as QueueEntry[])
         selectFromUrl(q.data as QueueEntry[])
