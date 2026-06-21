@@ -52,9 +52,41 @@ const WEEK_DAYS = [
 ]
 
 const DEFAULT_DAILY_HOURS = WEEK_DAYS.reduce((acc, day) => {
-  acc[day.key] = { open: day.key !== 'sunday', openTime: '17:00', closeTime: '22:00' }
+  acc[day.key] = { open: day.key !== 'wednesday', openTime: '14:00', closeTime: '22:00' }
   return acc
 }, {} as Record<string, { open: boolean; openTime: string; closeTime: string }>)
+
+const DEFAULT_SHOP_SETTINGS = {
+  operationsMode: 'both', // 'both', 'slot', 'queue', 'closed'
+  openTime: '14:00',
+  closeTime: '22:00',
+  breakStart: '19:15',
+  breakEnd: '20:00',
+  dailyHours: DEFAULT_DAILY_HOURS,
+  averageServiceMinutes: 30,
+  maxWalkInWaitMinutes: 120,
+  whatsappQueueMessage: DEFAULT_QUEUE_MESSAGE,
+  barbers: [
+    { id: '1', name: 'Julian', active: true, role: 'both' },
+    { id: '2', name: 'Marcus', active: true, role: 'queue' }
+  ]
+}
+
+const normalizeShopSettings = (settings: any) => {
+  const incoming = settings || {}
+  return {
+    ...DEFAULT_SHOP_SETTINGS,
+    ...incoming,
+    dailyHours: {
+      ...DEFAULT_DAILY_HOURS,
+      ...(incoming.dailyHours || {})
+    },
+    whatsappQueueMessage: incoming.whatsappQueueMessage || DEFAULT_QUEUE_MESSAGE,
+    barbers: Array.isArray(incoming.barbers) && incoming.barbers.length > 0
+      ? incoming.barbers
+      : DEFAULT_SHOP_SETTINGS.barbers
+  }
+}
 
 export default function AdminDashboardWrapper() {
   return (
@@ -84,28 +116,14 @@ function AdminDashboard() {
   const [metrics, setMetrics] = useState({ todayCuts: 0, todaySales: 0, weeklyCuts: 0, churnRisk: 0, absences: 0 })
 
   // Shop Management Configuration
-  const [shopSettings, setShopSettings] = useState({
-    operationsMode: 'both', // 'both', 'slot', 'queue', 'closed'
-    openTime: '17:00',
-    closeTime: '22:00',
-    breakStart: '19:15',
-    breakEnd: '20:00',
-    dailyHours: DEFAULT_DAILY_HOURS,
-    averageServiceMinutes: 30,
-    maxWalkInWaitMinutes: 120,
-    whatsappQueueMessage: DEFAULT_QUEUE_MESSAGE,
-    barbers: [
-      { id: '1', name: 'Julian', active: true, role: 'both' },
-      { id: '2', name: 'Marcus', active: true, role: 'queue' }
-    ]
-  })
+  const [shopSettings, setShopSettings] = useState(DEFAULT_SHOP_SETTINGS)
   const [newBarberName, setNewBarberName] = useState('')
   const [longPressTimer, setLongPressTimer] = useState<NodeJS.Timeout | null>(null)
 
   useEffect(() => {
     router.prefetch('/pos')
     const saved = safeStorageGet('lot5_shop_settings')
-    if (saved) setShopSettings(JSON.parse(saved))
+    if (saved) setShopSettings(normalizeShopSettings(JSON.parse(saved)))
 
     checkAdmin()
 
@@ -233,10 +251,10 @@ function AdminDashboard() {
             .eq('id', 1)
             .single()
          if (sData?.raw_settings) {
-            setShopSettings(sData.raw_settings as any)
+            setShopSettings(normalizeShopSettings(sData.raw_settings))
          } else {
              const local = safeStorageGet('lot5_shop_settings')
-             if (local) setShopSettings(JSON.parse(local))
+             if (local) setShopSettings(normalizeShopSettings(JSON.parse(local)))
          }
 
      } catch (err) { console.error(err) }
@@ -392,13 +410,14 @@ function AdminDashboard() {
 
   const [isSaving, setIsSaving] = useState(false)
   const saveShopSettings = async (newSettings: any) => {
-      setShopSettings(newSettings)
-      safeStorageSet('lot5_shop_settings', JSON.stringify(newSettings))
+      const normalizedSettings = normalizeShopSettings(newSettings)
+      setShopSettings(normalizedSettings)
+      safeStorageSet('lot5_shop_settings', JSON.stringify(normalizedSettings))
       setIsSaving(true)
       if (process.env.NEXT_PUBLIC_SUPABASE_URL && !process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
          await supabase()
             .from('settings')
-            .upsert({ id: 1, raw_settings: newSettings }, { onConflict: 'id' })
+            .upsert({ id: 1, raw_settings: normalizedSettings }, { onConflict: 'id' })
       }
       setTimeout(() => setIsSaving(false), 1000)
   }

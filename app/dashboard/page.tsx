@@ -20,18 +20,45 @@ const WEEK_DAYS = [
 ]
 
 const DEFAULT_DAILY_HOURS = {
-  monday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  tuesday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  wednesday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  thursday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  friday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  saturday: { open: true, openTime: '17:00', closeTime: '22:00' },
-  sunday: { open: false, openTime: '17:00', closeTime: '22:00' }
+  monday: { open: true, openTime: '14:00', closeTime: '22:00' },
+  tuesday: { open: true, openTime: '14:00', closeTime: '22:00' },
+  wednesday: { open: false, openTime: '14:00', closeTime: '22:00' },
+  thursday: { open: true, openTime: '14:00', closeTime: '22:00' },
+  friday: { open: true, openTime: '14:00', closeTime: '22:00' },
+  saturday: { open: true, openTime: '14:00', closeTime: '22:00' },
+  sunday: { open: true, openTime: '14:00', closeTime: '22:00' }
 } as Record<string, { open: boolean; openTime: string; closeTime: string }>
 
 const parseTimeToMinutes = (timeStr: string) => {
   const [h, m] = timeStr.split(':').map(Number)
   return (h || 0) * 60 + (m || 0)
+}
+
+const DEFAULT_SHOP_SETTINGS = {
+  operationsMode: 'both',
+  openTime: '14:00',
+  closeTime: '22:00',
+  breakStart: '19:15',
+  breakEnd: '20:00',
+  dailyHours: DEFAULT_DAILY_HOURS,
+  averageServiceMinutes: 30,
+  maxWalkInWaitMinutes: 120,
+  barbers: [{ id: '1', name: 'Julian', active: true, role: 'both' }]
+}
+
+const normalizeShopSettings = (settings: any) => {
+  const incoming = settings || {}
+  return {
+    ...DEFAULT_SHOP_SETTINGS,
+    ...incoming,
+    dailyHours: {
+      ...DEFAULT_DAILY_HOURS,
+      ...(incoming.dailyHours || {})
+    },
+    barbers: Array.isArray(incoming.barbers) && incoming.barbers.length > 0
+      ? incoming.barbers
+      : DEFAULT_SHOP_SETTINGS.barbers
+  }
 }
 
 export default function UserDashboard() {
@@ -47,17 +74,7 @@ export default function UserDashboard() {
   const [remark, setRemark] = useState<string>('')
   
   // Shop Settings Logic
-  const [shopSettings, setShopSettings] = useState({
-    operationsMode: 'both',
-    openTime: '17:00',
-    closeTime: '22:00',
-    breakStart: '19:15',
-    breakEnd: '20:00',
-    dailyHours: DEFAULT_DAILY_HOURS,
-    averageServiceMinutes: 30,
-    maxWalkInWaitMinutes: 120,
-    barbers: [{ id: '1', name: 'Julian', active: true, role: 'both' }]
-  })
+  const [shopSettings, setShopSettings] = useState(DEFAULT_SHOP_SETTINGS)
 
   // My active ticket
   const [myTicket, setMyTicket] = useState<any | null>(null)
@@ -102,9 +119,23 @@ export default function UserDashboard() {
     return () => { if (channel) supabase().removeChannel(channel) }
   }, [])
 
+  useEffect(() => {
+    if (shopSettings.operationsMode === 'slot') {
+      setQueueMode('booking')
+      return
+    }
+    if (shopSettings.operationsMode === 'queue') {
+      setQueueMode('walk-in')
+      return
+    }
+    if (!canJoinWalkIn && canBookSlot) {
+      setQueueMode('booking')
+    }
+  }, [shopSettings.operationsMode, canJoinWalkIn, canBookSlot])
+
   const fetchSessionAndData = async () => {
       const savedSettings = localStorage.getItem('lot5_shop_settings')
-      if (savedSettings) setShopSettings(JSON.parse(savedSettings))
+      if (savedSettings) setShopSettings(normalizeShopSettings(JSON.parse(savedSettings)))
 
       // Offline/Mock Support Check
       if (!process.env.NEXT_PUBLIC_SUPABASE_URL || process.env.NEXT_PUBLIC_SUPABASE_URL.includes('placeholder')) {
@@ -146,7 +177,7 @@ export default function UserDashboard() {
       const { data: sData } = await supabase().from('settings').select('raw_settings').eq('id', 1).single()
       let currentSettings = shopSettings
       if (sData?.raw_settings) {
-         currentSettings = sData.raw_settings as any
+         currentSettings = normalizeShopSettings(sData.raw_settings)
          setShopSettings(currentSettings)
          if (currentSettings.operationsMode === 'slot') setQueueMode('booking')
          if (currentSettings.operationsMode === 'queue') setQueueMode('walk-in')
@@ -355,6 +386,16 @@ export default function UserDashboard() {
   const myQueueIndex = walkInActiveQueue.findIndex(q => q.id === myTicket?.id);
   const peopleAhead = myQueueIndex >= 0 ? myQueueIndex : 0;
   const myWaitTimeMins = Math.ceil((peopleAhead * averageServiceMinutes) / activeWalkInBarbers);
+  const availableSlots = generateSlots();
+  const bookingUnavailableReason = !todayHours.open
+    ? 'The shop is closed today.'
+    : shopSettings.operationsMode === 'queue'
+      ? 'Slot booking is disabled because Shop Management is set to Queue Only.'
+      : shopSettings.operationsMode === 'closed'
+        ? 'The shop is closed in Shop Management.'
+        : availableSlots.length > 0 && availableSlots.every(slot => slot.full)
+          ? 'All available slots are full today.'
+          : 'Check booking barber availability and schedule settings.'
 
   return (
     <div className="min-h-screen text-on-surface font-body bg-[#f8fcfd] selection:bg-primary-container selection:text-on-primary-container pb-24">
@@ -548,7 +589,7 @@ export default function UserDashboard() {
                              <h1 className="font-headline text-4xl font-black tracking-tight text-[#545b00] mb-6 text-center">Book a Slot</h1>
                              <div className="mb-6 h-[200px] overflow-y-auto custom-scrollbar pr-2">
                                  <div className="grid grid-cols-3 gap-3">
-                                    {generateSlots().map(slotObj => (
+                                    {availableSlots.map(slotObj => (
                                        <button 
                                          key={slotObj.time}
                                          disabled={slotObj.full}
@@ -560,9 +601,17 @@ export default function UserDashboard() {
                                          {slotObj.time}
                                          {slotObj.full && <span className="text-[8px] uppercase tracking-widest mt-0.5 opacity-80">Full</span>}
                                        </button>
-                                    ))}
-                                 </div>
-                              </div>
+                                     ))}
+                                     {availableSlots.length === 0 && (
+                                       <div className="col-span-3 rounded-2xl border border-dashed border-outline-variant/20 bg-surface-container-lowest px-4 py-8 text-center">
+                                         <p className="font-black text-on-surface">No slots available today</p>
+                                         <p className="text-sm font-bold text-on-surface-variant mt-2">
+                                           {bookingUnavailableReason}
+                                         </p>
+                                       </div>
+                                     )}
+                                  </div>
+                               </div>
                              
                              <div className="space-y-4 mb-8">
                                 <div>
@@ -571,7 +620,7 @@ export default function UserDashboard() {
                                 </div>
                              </div>
 
-                              <button disabled={!canBookSlot} onClick={handleBookSlot} className="w-full bg-[#004be2] text-white font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
+                              <button disabled={!canBookSlot || availableSlots.length === 0} onClick={handleBookSlot} className="w-full bg-[#004be2] text-white font-headline font-extrabold text-xl py-5 rounded-full shadow-md hover:scale-[1.02] active:scale-[0.98] transition-all flex items-center justify-center gap-3 mb-6 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100">
                                  Confirm Booking
                               </button>
 
